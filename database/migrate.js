@@ -3,10 +3,14 @@ const fs = require('fs');
 const path = require('path');
 
 // Load environment variables from backend directory
-require('dotenv').config({ path: path.join(__dirname, '../backend/.env') });
+require('dotenv').config({ path: path.join(__dirname, 'backend/.env') });
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'todo_app',
+  user: process.env.DB_USER || process.env.USER || 'bilalrahaoui',
+  password: process.env.DB_PASSWORD,
 });
 
 async function runMigrations() {

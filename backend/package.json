@@ -1,7 +1,7 @@
 {
   "name": "todo-app-backend",
-  "version": "0.1.0",
-  "description": "Backend API for Todo App v0.1 - Basic Express server with health check endpoint",
+  "version": "0.2.0",
+  "description": "Backend API for Todo App v0.2 - Database connection and models with PostgreSQL",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

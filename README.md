@@ -1,16 +1,21 @@
-# Todo Application v0.1
+# Todo Application v0.2
 
 A full-stack web application demonstrating modern software engineering practices with incremental development and cloud deployment.
 
-## 🚀 Current Version: v0.1 - Basic Server Infrastructure
+## 🚀 Current Version: v0.2 - Database Connection & Models
 
-**v0.1 Features:**
+**v0.2 Features:**
 - ✅ Express.js server with health check endpoint
 - ✅ Basic middleware setup (CORS, JSON parsing, security headers)
 - ✅ Environment configuration
 - ✅ Error handling and graceful shutdown
 - ✅ Security middleware (Helmet, CORS)
 - ✅ Request logging and compression
+- ✅ **PostgreSQL database connection with connection pooling**
+- ✅ **User and Todo models with full CRUD operations**
+- ✅ **Database migration system**
+- ✅ **Comprehensive logging with Winston**
+- ✅ **Database error handling and validation**
 
 ## Architecture
 
@@ -40,8 +45,8 @@ v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 → v0.7 → v0.8 → v0.9 →
 
 | Version | Scope | Database | Storage | Status |
 |---------|-------|----------|---------|---------|
-| **v0.1** | **Basic server + health check** | **-** | **-** | **✅ COMPLETED** |
-| v0.2 | Database connection + models | PostgreSQL | - | 🔄 Next |
+| v0.1 | Basic server + health check | - | - | ✅ COMPLETED |
+| **v0.2** | **Database connection + models** | **PostgreSQL** | **-** | **✅ COMPLETED** |
 | v0.3 | JWT authentication | PostgreSQL | - | 📋 Planned |
 | v0.4 | Todo CRUD + complete app | PostgreSQL | Local FS | 📋 Planned |
 | v0.5 | Bug fixes + UX improvements | PostgreSQL | Local FS | 📋 Planned |
@@ -51,40 +56,46 @@ v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 → v0.7 → v0.8 → v0.9 →
 | v0.9 | Security hardening + monitoring | PostgreSQL | Local FS | 📋 Planned |
 | v1.0 | AWS migration + production | AWS RDS MySQL | AWS S3 | 📋 Planned |
 
-### What's Included in v0.1
+### What's Included in v0.2
 
 #### ✅ Completed Features
 - **Express.js Server**: Basic HTTP server with proper middleware stack
-- **Health Check Endpoint**: `/api/health` for monitoring server status
+- **Health Check Endpoint**: `/api/health` with database status monitoring
 - **Security Middleware**: Helmet for security headers, CORS configuration
 - **Request Processing**: JSON parsing, URL encoding, compression
 - **Error Handling**: Global error handler with proper HTTP status codes
-- **Logging**: Request logging with Morgan
+- **Logging**: Comprehensive logging with Winston (console + file)
 - **Environment Configuration**: Environment variable support
 - **Graceful Shutdown**: Proper process termination handling
+- **PostgreSQL Database**: Connection with connection pooling
+- **User Model**: Full CRUD operations with password hashing
+- **Todo Model**: Full CRUD operations with filtering and search
+- **Migration System**: Database schema management
+- **Database Error Handling**: Comprehensive error handling and logging
 
 #### 🔧 Technical Implementation
-- **Dependencies**: All required packages installed and configured
-- **Code Quality**: ESLint configuration for code standards
-- **Error Responses**: Standardized JSON error response format
-- **Security**: Basic security headers and CORS protection
-- **Performance**: Response compression and request logging
+- **Database Connection Pool**: 20 max connections with proper timeout handling
+- **Model Architecture**: Clean separation with proper error handling
+- **Password Security**: bcrypt hashing with configurable salt rounds
+- **Query Logging**: Performance monitoring and debugging
+- **Connection Management**: Graceful connection handling and cleanup
+- **Schema Management**: Automated migration system
 
-### What's Coming in v0.2
+### What's Coming in v0.3
 
 #### 📋 Planned Features
-- **Database Connection**: PostgreSQL connection with connection pooling
-- **Database Models**: User and Todo models with CRUD operations
-- **Migration System**: Database schema management
-- **Model Validation**: Input validation for database operations
-- **Database Error Handling**: Proper error handling for database operations
+- **JWT Authentication**: Token-based authentication system
+- **User Registration**: User signup with validation
+- **User Login**: Authentication with JWT token generation
+- **Protected Routes**: Middleware for route protection
+- **Password Security**: Enhanced password validation and security
 
-#### 🎯 Success Criteria for v0.2
-- Database connection established successfully
-- User and Todo models support full CRUD operations
-- Database queries execute without errors
-- Connection pool manages connections efficiently
-- Migration system functional
+#### 🎯 Success Criteria for v0.3
+- Users can register and login successfully
+- JWT tokens are valid and properly formatted
+- Protected routes require valid authentication
+- Password security meets industry standards
+- Authentication errors return appropriate HTTP status codes
 
 ### Project Structure
 ```
@@ -279,13 +290,14 @@ CREATE TABLE user_preferences (
 );
 ```
 
-## 🛠️ v0.1 Setup & Installation
+## 🛠️ v0.2 Setup & Installation
 
 ### Prerequisites
 - Node.js ≥ 16.0.0
 - npm ≥ 8.0.0
+- PostgreSQL ≥ 12.0
 
-### Quick Start (v0.1)
+### Quick Start (v0.2)
 
 #### 1. Clone and Setup
 ```bash
@@ -297,13 +309,24 @@ cd todo_app_AWS/groupproject
 cd backend
 ```
 
-#### 2. Install Dependencies
+#### 2. Database Setup
+```bash
+# Install PostgreSQL (if not already installed)
+# macOS with Homebrew:
+brew install postgresql@14
+brew services start postgresql@14
+
+# Create database
+createdb todo_app
+```
+
+#### 3. Install Dependencies
 ```bash
 # Install all required packages
 npm install
 ```
 
-#### 3. Environment Configuration
+#### 4. Environment Configuration
 ```bash
 # Copy environment template
 cp env.example .env
@@ -312,20 +335,36 @@ cp env.example .env
 nano .env
 ```
 
-**Required .env variables for v0.1:**
+**Required .env variables for v0.2:**
 ```bash
 # Environment Configuration
 NODE_ENV=development
 PORT=5000
+
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=todo_app
+DB_USER=your_username
+DB_PASSWORD=your_password
 
 # CORS Configuration
 CORS_ORIGIN=http://localhost:3000
 
 # Logging Configuration
 LOG_LEVEL=info
+
+# Security Configuration
+BCRYPT_ROUNDS=12
 ```
 
-#### 4. Start the Server
+#### 5. Run Database Migrations
+```bash
+# Run database migrations to create tables
+node ../database/migrate.js
+```
+
+#### 6. Start the Server
 ```bash
 # Development mode with auto-restart
 npm run dev
@@ -334,9 +373,9 @@ npm run dev
 npm start
 ```
 
-#### 5. Verify Installation
+#### 7. Verify Installation
 ```bash
-# Test health endpoint
+# Test health endpoint with database status
 curl http://localhost:5000/api/health
 
 # Expected response:
@@ -345,17 +384,21 @@ curl http://localhost:5000/api/health
   "status": "OK",
   "timestamp": "2024-01-01T00:00:00.000Z",
   "environment": "development",
-  "version": "0.1.0",
-  "uptime": 123.456
+  "version": "0.2.0",
+  "uptime": 123.456,
+  "database": {
+    "connected": true,
+    "status": "healthy"
+  }
 }
 ```
 
-### Available Endpoints (v0.1)
+### Available Endpoints (v0.2)
 
 | Method | Endpoint | Description | Response |
 |--------|----------|-------------|----------|
 | GET | `/` | API information | API details and available endpoints |
-| GET | `/api/health` | Health check | Server status and uptime |
+| GET | `/api/health` | Health check | Server status, uptime, and database status |
 
 ### Development Commands
 
