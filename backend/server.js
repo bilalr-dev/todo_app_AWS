@@ -1,5 +1,5 @@
-// Main server entry point for Todo App v0.2
-// Express server with database connection and models
+// Main server entry point for Todo App v0.3
+// Express server with JWT authentication and protected routes
 
 const express = require('express');
 const cors = require('cors');
@@ -8,9 +8,11 @@ const compression = require('compression');
 const morgan = require('morgan');
 require('dotenv').config();
 
-// Import database and models
+// Import database, models, and routes
 const { testConnection, closePool } = require('./src/config/database');
 const { logger, requestLogger, errorLogger } = require('./src/utils/logger');
+const authRoutes = require('./src/routes/auth');
+const todoRoutes = require('./src/routes/todos');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,7 +58,7 @@ app.get('/api/health', async (req, res) => {
       status: 'OK', 
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      version: '0.2.0',
+      version: '0.3.0',
       uptime: process.uptime(),
       database: {
         connected: dbConnected,
@@ -69,7 +71,7 @@ app.get('/api/health', async (req, res) => {
       status: 'SERVICE_UNAVAILABLE',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      version: '0.2.0',
+      version: '0.3.0',
       uptime: process.uptime(),
       database: {
         connected: false,
@@ -84,21 +86,32 @@ app.get('/api/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Todo App API v0.2',
-    version: '0.2.0',
+    message: 'Todo App API v0.3',
+    version: '0.3.0',
     endpoints: {
-      health: '/api/health'
+      health: '/api/health',
+      auth: '/api/auth',
+      todos: '/api/todos'
     },
     features: [
       'Express.js server with middleware',
       'PostgreSQL database connection',
-      'User and Todo models with CRUD operations',
+      'JWT authentication system',
+      'User registration and login',
+      'Protected Todo CRUD operations',
+      'Password hashing with bcrypt',
+      'Token refresh mechanism',
+      'Comprehensive input validation',
       'Database migration system',
       'Comprehensive logging',
       'Error handling and validation'
     ]
   });
 });
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/todos', todoRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

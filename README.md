@@ -1,10 +1,10 @@
-# Todo Application v0.2
+# Todo Application v0.3
 
 A full-stack web application demonstrating modern software engineering practices with incremental development and cloud deployment.
 
-## 🚀 Current Version: v0.2 - Database Connection & Models
+## 🚀 Current Version: v0.3 - JWT Authentication System
 
-**v0.2 Features:**
+**v0.3 Features:**
 - ✅ Express.js server with health check endpoint
 - ✅ Basic middleware setup (CORS, JSON parsing, security headers)
 - ✅ Environment configuration
@@ -14,6 +14,12 @@ A full-stack web application demonstrating modern software engineering practices
 - ✅ **PostgreSQL database connection with connection pooling**
 - ✅ **User and Todo models with full CRUD operations**
 - ✅ **Database migration system**
+- ✅ **JWT authentication system**
+- ✅ **User registration and login endpoints**
+- ✅ **Password hashing with bcrypt**
+- ✅ **Token refresh mechanism**
+- ✅ **Protected Todo CRUD operations**
+- ✅ **Comprehensive input validation**
 - ✅ **Comprehensive logging with Winston**
 - ✅ **Database error handling and validation**
 
@@ -46,8 +52,8 @@ v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 → v0.7 → v0.8 → v0.9 →
 | Version | Scope | Database | Storage | Status |
 |---------|-------|----------|---------|---------|
 | v0.1 | Basic server + health check | - | - | ✅ COMPLETED |
-| **v0.2** | **Database connection + models** | **PostgreSQL** | **-** | **✅ COMPLETED** |
-| v0.3 | JWT authentication | PostgreSQL | - | 📋 Planned |
+| v0.2 | Database connection + models | PostgreSQL | - | ✅ COMPLETED |
+| **v0.3** | **JWT authentication** | **PostgreSQL** | **-** | **✅ COMPLETED** |
 | v0.4 | Todo CRUD + complete app | PostgreSQL | Local FS | 📋 Planned |
 | v0.5 | Bug fixes + UX improvements | PostgreSQL | Local FS | 📋 Planned |
 | v0.6 | Advanced features + file uploads | PostgreSQL | Local FS | 📋 Planned |
@@ -56,7 +62,7 @@ v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 → v0.7 → v0.8 → v0.9 →
 | v0.9 | Security hardening + monitoring | PostgreSQL | Local FS | 📋 Planned |
 | v1.0 | AWS migration + production | AWS RDS MySQL | AWS S3 | 📋 Planned |
 
-### What's Included in v0.2
+### What's Included in v0.3
 
 #### ✅ Completed Features
 - **Express.js Server**: Basic HTTP server with proper middleware stack
@@ -72,6 +78,15 @@ v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 → v0.7 → v0.8 → v0.9 →
 - **Todo Model**: Full CRUD operations with filtering and search
 - **Migration System**: Database schema management
 - **Database Error Handling**: Comprehensive error handling and logging
+- **JWT Authentication**: Token-based authentication system
+- **User Registration**: User signup with validation
+- **User Login**: Authentication with JWT token generation
+- **Password Security**: bcrypt hashing with configurable salt rounds
+- **Token Refresh**: Refresh token mechanism for extended sessions
+- **Protected Routes**: Authentication middleware for protected endpoints
+- **Todo CRUD with Auth**: Full Todo operations with user authentication
+- **Input Validation**: Comprehensive validation for all endpoints
+- **Profile Management**: User profile CRUD operations
 
 #### 🔧 Technical Implementation
 - **Database Connection Pool**: 20 max connections with proper timeout handling
@@ -81,21 +96,21 @@ v0.1 → v0.2 → v0.3 → v0.4 → v0.5 → v0.6 → v0.7 → v0.8 → v0.9 →
 - **Connection Management**: Graceful connection handling and cleanup
 - **Schema Management**: Automated migration system
 
-### What's Coming in v0.3
+### What's Coming in v0.4
 
 #### 📋 Planned Features
-- **JWT Authentication**: Token-based authentication system
-- **User Registration**: User signup with validation
-- **User Login**: Authentication with JWT token generation
+- **React Frontend**: Complete user interface with authentication
+- **Todo Management UI**: Full CRUD interface for todos
+- **Authentication Flow**: Login/register forms with token management
 - **Protected Routes**: Middleware for route protection
 - **Password Security**: Enhanced password validation and security
 
-#### 🎯 Success Criteria for v0.3
-- Users can register and login successfully
-- JWT tokens are valid and properly formatted
-- Protected routes require valid authentication
-- Password security meets industry standards
-- Authentication errors return appropriate HTTP status codes
+#### 🎯 Success Criteria for v0.4
+- Complete React frontend with authentication flow
+- Todo management interface with full CRUD operations
+- Responsive design for mobile and desktop
+- Real-time updates and state management
+- Error handling and user feedback
 
 ### Project Structure
 ```
@@ -133,7 +148,344 @@ todo-app/
 └── scripts/                # Development and deployment automation
 ```
 
-## API Specification
+## API Specification (v0.3)
+
+### Available Endpoints (v0.3)
+
+#### Authentication Endpoints
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "username": "string (3-30 chars, alphanumeric + underscore)",
+  "email": "string (valid email)",
+  "password": "string (min 8 chars, 1 uppercase, 1 lowercase, 1 number)"
+}
+
+Response:
+{
+  "success": true,
+  "message": "User registered successfully",
+  "data": {
+    "user": { "id": 1, "username": "testuser", "email": "test@example.com" },
+    "token": "jwt_access_token",
+    "refreshToken": "jwt_refresh_token"
+  }
+}
+```
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "string (valid email)",
+  "password": "string"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "user": { "id": 1, "username": "testuser", "email": "test@example.com" },
+    "token": "jwt_access_token",
+    "refreshToken": "jwt_refresh_token"
+  }
+}
+```
+
+```http
+GET /api/auth/profile
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "data": {
+    "user": { "id": 1, "username": "testuser", "email": "test@example.com" }
+  }
+}
+```
+
+```http
+PUT /api/auth/profile
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "username": "newusername",
+  "email": "newemail@example.com"
+}
+```
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "jwt_refresh_token"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Token refreshed successfully",
+  "data": {
+    "token": "new_jwt_access_token",
+    "refreshToken": "new_jwt_refresh_token"
+  }
+}
+```
+
+```http
+POST /api/auth/logout
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+#### Todo Endpoints (Protected)
+```http
+GET /api/todos?completed=true&priority=high&category=work&limit=50&offset=0&orderBy=created_at&orderDirection=DESC
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "data": {
+    "todos": [
+      {
+        "id": 1,
+        "title": "Test Todo",
+        "description": "This is a test todo",
+        "priority": "high",
+        "due_date": "2024-01-01T00:00:00.000Z",
+        "category": "work",
+        "completed": false,
+        "created_at": "2024-01-01T00:00:00.000Z",
+        "updated_at": "2024-01-01T00:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "total": 1,
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
+```
+
+```http
+GET /api/todos/:id
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "data": {
+    "todo": { /* todo object */ }
+  }
+}
+```
+
+```http
+POST /api/todos
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "title": "string (1-200 chars)",
+  "description": "string (max 1000 chars, optional)",
+  "priority": "low|medium|high (optional, default: medium)",
+  "due_date": "ISO 8601 date (optional, future dates only)",
+  "category": "string (max 50 chars, optional)"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Todo created successfully",
+  "data": {
+    "todo": { /* created todo object */ }
+  }
+}
+```
+
+```http
+PUT /api/todos/:id
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "title": "string (1-200 chars, optional)",
+  "description": "string (max 1000 chars, optional)",
+  "priority": "low|medium|high (optional)",
+  "due_date": "ISO 8601 date (optional)",
+  "category": "string (max 50 chars, optional)",
+  "completed": "boolean (optional)"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Todo updated successfully",
+  "data": {
+    "todo": { /* updated todo object */ }
+  }
+}
+```
+
+```http
+PATCH /api/todos/:id/toggle
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "message": "Todo completion status updated",
+  "data": {
+    "todo": { /* updated todo object with toggled completion */ }
+  }
+}
+```
+
+```http
+DELETE /api/todos/:id
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "message": "Todo deleted successfully"
+}
+```
+
+```http
+POST /api/todos/search
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "query": "string (1-100 chars)",
+  "limit": "number (1-100, optional, default: 50)",
+  "offset": "number (>=0, optional, default: 0)"
+}
+
+Response:
+{
+  "success": true,
+  "data": {
+    "todos": [ /* matching todo objects */ ],
+    "query": "search query",
+    "pagination": {
+      "limit": 50,
+      "offset": 0,
+      "hasMore": false
+    }
+  }
+}
+```
+
+```http
+POST /api/todos/bulk
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "todoIds": [1, 2, 3],
+  "operation": "delete|complete|uncomplete|update",
+  "updateData": { /* fields to update for 'update' operation */ }
+}
+
+Response:
+{
+  "success": true,
+  "message": "Bulk operation completed successfully",
+  "data": {
+    "operation": "delete",
+    "affectedCount": 3,
+    "todoIds": [1, 2, 3]
+  }
+}
+```
+
+```http
+GET /api/todos/stats
+Authorization: Bearer <jwt_token>
+
+Response:
+{
+  "success": true,
+  "data": {
+    "stats": {
+      "total": 10,
+      "completed": 3,
+      "pending": 7,
+      "high_priority": 2,
+      "overdue": 1
+    }
+  }
+}
+```
+
+#### Health Check
+```http
+GET /api/health
+
+Response:
+{
+  "success": true,
+  "status": "OK",
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "environment": "development",
+  "version": "0.3.0",
+  "uptime": 123.456,
+  "database": {
+    "connected": true,
+    "status": "healthy"
+  }
+}
+```
+
+### Error Responses
+All endpoints return consistent error responses:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable error message",
+    "details": [] // Additional error details for validation errors
+  },
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### Common Error Codes
+- `VALIDATION_ERROR`: Input validation failed
+- `NO_TOKEN`: No authentication token provided
+- `INVALID_TOKEN`: Invalid or expired token
+- `TOKEN_EXPIRED`: Token has expired
+- `USER_EXISTS`: User with email already exists
+- `USERNAME_EXISTS`: Username already taken
+- `INVALID_CREDENTIALS`: Invalid email or password
+- `TODO_NOT_FOUND`: Todo not found
+- `ACCESS_DENIED`: User doesn't have permission
+- `AUTH_ERROR`: Authentication error
+- `FETCH_ERROR`: Error fetching data
+- `CREATE_ERROR`: Error creating resource
+- `UPDATE_ERROR`: Error updating resource
+- `DELETE_ERROR`: Error deleting resource
+
+## Legacy API Specification
 
 ### Authentication Endpoints
 ```http
@@ -290,14 +642,14 @@ CREATE TABLE user_preferences (
 );
 ```
 
-## 🛠️ v0.2 Setup & Installation
+## 🛠️ v0.3 Setup & Installation
 
 ### Prerequisites
 - Node.js ≥ 16.0.0
 - npm ≥ 8.0.0
 - PostgreSQL ≥ 12.0
 
-### Quick Start (v0.2)
+### Quick Start (v0.3)
 
 #### 1. Clone and Setup
 ```bash
@@ -335,7 +687,7 @@ cp env.example .env
 nano .env
 ```
 
-**Required .env variables for v0.2:**
+**Required .env variables for v0.3:**
 ```bash
 # Environment Configuration
 NODE_ENV=development
@@ -356,6 +708,12 @@ LOG_LEVEL=info
 
 # Security Configuration
 BCRYPT_ROUNDS=12
+
+# JWT Configuration (v0.3+)
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_EXPIRE=24h
+JWT_REFRESH_SECRET=your-refresh-secret-key
+JWT_REFRESH_EXPIRE=7d
 ```
 
 #### 5. Run Database Migrations
@@ -384,7 +742,7 @@ curl http://localhost:5000/api/health
   "status": "OK",
   "timestamp": "2024-01-01T00:00:00.000Z",
   "environment": "development",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "uptime": 123.456,
   "database": {
     "connected": true,
@@ -393,12 +751,27 @@ curl http://localhost:5000/api/health
 }
 ```
 
-### Available Endpoints (v0.2)
+### Available Endpoints (v0.3)
 
 | Method | Endpoint | Description | Response |
 |--------|----------|-------------|----------|
 | GET | `/` | API information | API details and available endpoints |
 | GET | `/api/health` | Health check | Server status, uptime, and database status |
+| POST | `/api/auth/register` | User registration | User data and JWT tokens |
+| POST | `/api/auth/login` | User login | User data and JWT tokens |
+| GET | `/api/auth/profile` | Get user profile | User profile data |
+| PUT | `/api/auth/profile` | Update user profile | Updated user profile |
+| POST | `/api/auth/refresh` | Refresh JWT token | New JWT tokens |
+| POST | `/api/auth/logout` | User logout | Success message |
+| GET | `/api/todos` | Get user todos | List of todos with pagination |
+| POST | `/api/todos` | Create todo | Created todo data |
+| GET | `/api/todos/:id` | Get specific todo | Todo data |
+| PUT | `/api/todos/:id` | Update todo | Updated todo data |
+| PATCH | `/api/todos/:id/toggle` | Toggle todo completion | Updated todo data |
+| DELETE | `/api/todos/:id` | Delete todo | Success message |
+| POST | `/api/todos/search` | Search todos | Matching todos |
+| POST | `/api/todos/bulk` | Bulk operations | Operation results |
+| GET | `/api/todos/stats` | Get todo statistics | Statistics data |
 
 ### Development Commands
 
@@ -444,14 +817,14 @@ node -e "require('dotenv').config(); console.log(process.env.PORT)"
 
 ## Future Development Setup
 
-### Prerequisites (v0.2+)
+### Prerequisites (v0.3+)
 - Node.js ≥ 16.0.0
-- PostgreSQL ≥ 12.0 (v0.2+)
+- PostgreSQL ≥ 12.0 (v0.3+)
 - npm ≥ 8.0.0
 
-### Local Development (v0.2+)
+### Local Development (v0.3+)
 ```bash
-# 1. Database setup (v0.2+)
+# 1. Database setup (v0.3+)
 createdb todo_app
 
 # 2. Backend setup
@@ -522,7 +895,7 @@ npm run test:e2e
 
 ## 🚀 Deployment
 
-### v0.1 Local Deployment
+### v0.3 Local Deployment
 
 #### Development Deployment
 ```bash
@@ -568,7 +941,7 @@ pm2 stop todo-app-v0.1
 
 #### Docker Deployment (Optional)
 ```dockerfile
-# Dockerfile for v0.1
+# Dockerfile for v0.3
 FROM node:18-alpine
 
 WORKDIR /app

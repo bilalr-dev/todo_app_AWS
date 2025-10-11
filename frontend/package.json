@@ -1,7 +1,7 @@
 {
   "name": "todo-app-frontend",
-  "version": "1.0.0",
-  "description": "React frontend for Todo App with advanced features and real-time updates",
+  "version": "0.3.0",
+  "description": "React frontend for Todo App v0.3 - JWT authentication and basic UI",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
