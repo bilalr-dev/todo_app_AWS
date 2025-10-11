@@ -1,7 +1,7 @@
 {
   "name": "todo-app-backend",
-  "version": "1.0.0",
-  "description": "Backend API for Todo App with JWT authentication, file uploads, and real-time features",
+  "version": "0.1.0",
+  "description": "Backend API for Todo App v0.1 - Basic Express server with health check endpoint",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
