@@ -1,4 +1,4 @@
-// Todo model for database operations v0.3
+// Todo model for database operations v0.4
 const { query } = require('../config/database');
 const { logger } = require('../utils/logger');
 

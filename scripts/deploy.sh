@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Todo App Deployment Script
-# This script deploys the application to AWS
+# Todo App v0.4 Deployment Script
+# This script deploys the v0.4 Complete Todo Application to AWS
 
-echo "🚀 Deploying Todo App to AWS..."
+echo "🚀 Deploying Todo App v0.4 to AWS..."
 
 # Check if AWS CLI is installed
 if ! command -v aws &> /dev/null; then

@@ -128,25 +128,25 @@ This document outlines the development strategy for a full-stack Todo applicatio
 - Password security meets standards
 - Token expiration handling
 
-### Phase 4: Core Features (v0.4)
+### Phase 4: Core Features (v0.4) ✅ **COMPLETED**
 **Duration**: 2 weeks  
 **Scope**: Complete Todo application
 
 #### Deliverables
-- [ ] Todo CRUD operations
-- [ ] React frontend with authentication
-- [ ] Todo list management
-- [ ] Priority and due date features
-- [ ] Category organization
-- [ ] Search and filtering
-- [ ] Responsive UI design
+- [x] Todo CRUD operations
+- [x] React frontend with authentication
+- [x] Todo list management
+- [x] Priority and due date features
+- [x] Category organization
+- [x] Search and filtering
+- [x] Responsive UI design
 
 #### Acceptance Criteria
-- Full Todo CRUD functionality
-- User authentication flow
-- Responsive design on mobile/desktop
-- Search and filter operations
-- Data persistence across sessions
+- [x] Full Todo CRUD functionality
+- [x] User authentication flow
+- [x] Responsive design on mobile/desktop
+- [x] Search and filter operations
+- [x] Data persistence across sessions
 
 ### Phase 5: Quality Assurance (v0.5)
 **Duration**: 1 week  

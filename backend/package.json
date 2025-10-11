@@ -1,7 +1,7 @@
 {
   "name": "todo-app-backend",
-  "version": "0.3.0",
-  "description": "Backend API for Todo App v0.3 - JWT authentication system with protected routes",
+  "version": "0.4.0",
+  "description": "Backend API for Todo App v0.4 - Complete todo application with React frontend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

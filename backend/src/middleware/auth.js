@@ -1,4 +1,4 @@
-// JWT Authentication middleware for v0.3
+// JWT Authentication middleware for v0.4
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { logger } = require('../utils/logger');

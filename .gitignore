@@ -76,8 +76,9 @@ Thumbs.db
 # PM2
 .pm2/
 
-# Documentation (developer only)
+# Documentation (developer only) - but keep completion reports
 docs/
+!docs/completion-reports/
 
 # File uploads
 uploads/

@@ -1,4 +1,4 @@
-// Main server entry point for Todo App v0.3
+// Main server entry point for Todo App v0.4
 // Express server with JWT authentication and protected routes
 
 const express = require('express');
@@ -58,7 +58,7 @@ app.get('/api/health', async (req, res) => {
       status: 'OK', 
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      version: '0.3.0',
+      version: '0.4.0',
       uptime: process.uptime(),
       database: {
         connected: dbConnected,
@@ -71,7 +71,7 @@ app.get('/api/health', async (req, res) => {
       status: 'SERVICE_UNAVAILABLE',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      version: '0.3.0',
+      version: '0.4.0',
       uptime: process.uptime(),
       database: {
         connected: false,
@@ -86,8 +86,8 @@ app.get('/api/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Todo App API v0.3',
-    version: '0.3.0',
+    message: 'Todo App API v0.4',
+    version: '0.4.0',
     endpoints: {
       health: '/api/health',
       auth: '/api/auth',

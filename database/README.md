@@ -1,6 +1,6 @@
-# Database Documentation
+# Database Documentation v0.4
 
-This directory contains database-related files for the Todo App.
+This directory contains database-related files for the Todo App v0.4 - Complete Todo Application.
 
 ## 📁 **Directory Structure**
 
@@ -14,7 +14,7 @@ database/
 
 ## 🗄️ **Database Schema**
 
-The application uses **PostgreSQL** (v0.x) and **AWS RDS MySQL** (v1.0) with the following tables:
+The application uses **PostgreSQL** (v0.4) and **AWS RDS MySQL** (v1.0) with the following tables:
 
 ### **Users Table**
 - `id` - Primary key (AUTO_INCREMENT)
@@ -62,7 +62,7 @@ Seed files contain sample data for development:
 
 ## 📋 **Usage**
 
-1. **Development (v0.x)**: Use local PostgreSQL instance
+1. **Development (v0.4)**: Use local PostgreSQL instance
 2. **Production (v1.0)**: Use AWS RDS MySQL instance
 3. **Migrations**: Run in sequence for database updates
 4. **Seeds**: Load sample data for testing

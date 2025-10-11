@@ -1,6 +1,6 @@
-# Testing Documentation
+# Testing Documentation v0.4
 
-This directory contains all test files for the Todo App.
+This directory contains all test files for the Todo App v0.4 - Complete Todo Application.
 
 ## 📁 **Directory Structure**
 

@@ -1,4 +1,4 @@
-// Authentication routes for v0.3
+// Authentication routes for v0.4
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');

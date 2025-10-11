@@ -1,4 +1,4 @@
-// Input validation middleware for v0.3
+// Input validation middleware for v0.4
 const { body, validationResult } = require('express-validator');
 const { logger } = require('../utils/logger');
 

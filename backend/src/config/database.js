@@ -1,4 +1,4 @@
-// Database configuration and connection management for v0.3
+// Database configuration and connection management for v0.4
 const { Pool } = require('pg');
 const { logger } = require('../utils/logger');
 
