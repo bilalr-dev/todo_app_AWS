@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 // Theme context
 const ThemeContext = createContext();
@@ -14,6 +15,7 @@ export const useTheme = () => {
 
 // Theme provider component
 export const ThemeProvider = ({ children }) => {
+  const { user, updateProfile } = useAuth();
   const [theme, setTheme] = useState(() => {
     // Check localStorage first, then default to light
     const savedTheme = localStorage.getItem('theme');
@@ -24,6 +26,13 @@ export const ThemeProvider = ({ children }) => {
     // Default to light theme for better visibility
     return 'light';
   });
+
+  // Load user theme preference when user logs in
+  useEffect(() => {
+    if (user && user.theme_preference) {
+      setTheme(user.theme_preference);
+    }
+  }, [user]);
 
   // Apply theme to document
   useEffect(() => {
@@ -40,14 +49,33 @@ export const ThemeProvider = ({ children }) => {
   }, [theme]);
 
   // Toggle theme function
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  const toggleTheme = async () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    
+    // Save to user account if logged in (without showing notification)
+    if (user && !user.is_demo) {
+      try {
+        await updateProfile({ theme_preference: newTheme }, false);
+      } catch (error) {
+        console.error('Failed to save theme preference:', error);
+      }
+    }
   };
 
   // Set specific theme function
-  const setThemeMode = (newTheme) => {
+  const setThemeMode = async (newTheme) => {
     if (newTheme === 'light' || newTheme === 'dark') {
       setTheme(newTheme);
+      
+      // Save to user account if logged in (without showing notification)
+      if (user && !user.is_demo) {
+        try {
+          await updateProfile({ theme_preference: newTheme }, false);
+        } catch (error) {
+          console.error('Failed to save theme preference:', error);
+        }
+      }
     }
   };
 

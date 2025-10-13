@@ -1,7 +1,7 @@
 {
   "name": "todo-app-backend",
-  "version": "0.4.0",
-  "description": "Backend API for Todo App v0.4 - Complete todo application with React frontend",
+  "version": "0.5.0",
+  "description": "Backend API for Todo App v0.5 - Optimized todo application with modern UI and performance",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -90,16 +90,16 @@ const Login = () => {
 
   const handleDemoLogin = async () => {
     setFormData({
-      email: 'demo@example.com',
-      password: 'Password123',
+      email: 'demo@todoapp.com',
+      password: 'Demo123!',
     });
     
     setIsSubmitting(true);
     
     try {
       await login({
-        email: 'demo@example.com',
-        password: 'Password123',
+        email: 'demo@todoapp.com',
+        password: 'Demo123!',
       });
     } catch (error) {
       console.error('Demo login error:', error);

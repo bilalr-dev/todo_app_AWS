@@ -1,4 +1,4 @@
-// Authentication routes for v0.4
+// Authentication routes for v0.5
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
@@ -164,12 +164,26 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // Update user profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { username, email } = req.body;
+    // Check if user is a demo user
+    if (req.user.isDemoUser()) {
+      logger.warn('Demo user attempted profile update', { userId: req.userId });
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'DEMO_USER_RESTRICTION',
+          message: 'Profile updates are disabled for demo users'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const { username, email, theme_preference } = req.body;
     const updateData = {};
 
     // Only update provided fields
     if (username) updateData.username = username;
     if (email) updateData.email = email;
+    if (theme_preference) updateData.theme_preference = theme_preference;
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
@@ -298,10 +312,25 @@ router.post('/refresh', async (req, res) => {
   }
 });
 
-// Logout (client-side token removal)
-router.post('/logout', authenticateToken, async (req, res) => {
+// Logout (client-side token removal) - Allow logout even with invalid/expired tokens
+router.post('/logout', async (req, res) => {
   try {
-    logger.info('User logged out', { userId: req.userId });
+    // Try to authenticate, but don't fail if token is invalid
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        logger.info('User logged out', { userId: decoded.userId });
+      } catch (tokenError) {
+        // Token is invalid/expired, but that's okay for logout
+        logger.info('User logged out with invalid token');
+      }
+    } else {
+      logger.info('User logged out without token');
+    }
     
     res.json({
       success: true,
@@ -309,7 +338,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Logout error', { error: error.message, userId: req.userId });
+    logger.error('Logout error', { error: error.message });
     res.status(500).json({
       success: false,
       error: {

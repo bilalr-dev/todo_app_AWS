@@ -2,7 +2,7 @@
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:5002/api',
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000,
@@ -11,7 +11,7 @@ export const API_CONFIG = {
 // App Configuration
 export const APP_CONFIG = {
   NAME: process.env.REACT_APP_APP_NAME || 'Todo App',
-  VERSION: process.env.REACT_APP_VERSION || '0.4.0',
+  VERSION: process.env.REACT_APP_VERSION || '0.5.0',
   DESCRIPTION: 'A modern todo application with JWT authentication',
   AUTHOR: 'Todo App Team',
   SUPPORT_EMAIL: 'support@todoapp.com',
@@ -201,8 +201,8 @@ export const VALIDATION_RULES = {
   USERNAME: {
     MIN_LENGTH: 3,
     MAX_LENGTH: 30,
-    PATTERN: /^[a-zA-Z0-9_]+$/,
-    MESSAGE: 'Username must be 3-30 characters long and contain only letters, numbers, and underscores',
+    PATTERN: /^(?=.*[a-zA-Z])[a-zA-Z0-9_]+$/,
+    MESSAGE: 'Username must be 3-30 characters long, contain at least one letter, and can only contain letters, numbers, and underscores',
   },
   
   EMAIL: {
@@ -212,8 +212,8 @@ export const VALIDATION_RULES = {
   
   PASSWORD: {
     MIN_LENGTH: 8,
-    PATTERN: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,
-    MESSAGE: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number',
+    PATTERN: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).*$/,
+    MESSAGE: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
   },
   
   TODO_TITLE: {

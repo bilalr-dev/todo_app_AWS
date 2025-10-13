@@ -1,7 +1,7 @@
 {
   "name": "todo-app-frontend",
-  "version": "0.4.0",
-  "description": "React frontend for Todo App v0.4 - Complete todo application with modern UI",
+  "version": "0.5.0",
+  "description": "React frontend for Todo App v0.5 - Optimized todo application with modern UI and performance",
   "private": true,
   "dependencies": {
     "@tanstack/react-query": "^4.32.6",
@@ -66,7 +66,7 @@
     "tailwindcss": "^3.3.3",
     "webpack-bundle-analyzer": "^4.9.1"
   },
-  "proxy": "http://localhost:5000",
+  "proxy": "http://localhost:5002",
   "engines": {
     "node": ">=16.0.0",
     "npm": ">=8.0.0"

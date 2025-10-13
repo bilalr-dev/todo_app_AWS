@@ -1,4 +1,4 @@
-// Todo model for database operations v0.4
+// Todo model for database operations v0.5
 const { query } = require('../config/database');
 const { logger } = require('../utils/logger');
 
@@ -326,7 +326,15 @@ class Todo {
         [userId]
       );
       
-      return result.rows[0];
+      // Convert string counts to integers
+      const stats = result.rows[0];
+      return {
+        total: parseInt(stats.total),
+        completed: parseInt(stats.completed),
+        pending: parseInt(stats.pending),
+        high_priority: parseInt(stats.high_priority),
+        overdue: parseInt(stats.overdue)
+      };
     } catch (error) {
       logger.error('Error getting todo stats', { error: error.message, userId });
       throw error;

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
 
 // Create axios instance
 const api = axios.create({
@@ -55,10 +55,9 @@ api.interceptors.response.use(
           }
         }
       } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
+        // Refresh failed, but don't clear tokens or redirect here
+        // Let the AuthContext handle the error appropriately
+        console.log('Token refresh failed, letting AuthContext handle it');
       }
     }
 
@@ -121,7 +120,7 @@ export const authAPI = {
   // Logout user
   logout: async () => {
     try {
-      const response = await api.post('/auth/logout');
+      const response = await api.post('/auth/logout', {});
       return response.data;
     } catch (error) {
       throw error;
@@ -183,7 +182,11 @@ export const todosAPI = {
   // Toggle todo completion
   toggleTodo: async (id) => {
     try {
-      const response = await api.patch(`/todos/${id}/toggle`);
+      const response = await api.patch(`/todos/${id}/toggle`, {}, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       return response.data;
     } catch (error) {
       throw error;

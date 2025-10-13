@@ -1,0 +1,45 @@
+{
+  "name": "todo-app",
+  "version": "0.5.0",
+  "description": "Todo App v0.5 - Full-stack todo application with React frontend and Node.js backend",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && npm start",
+    "frontend": "cd frontend && npm start",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "test": "cd backend && npm test",
+    "migrate": "cd database && node migrate.js",
+    "setup": "npm run install-all && npm run migrate"
+  },
+  "keywords": [
+    "todo",
+    "react",
+    "nodejs",
+    "express",
+    "postgresql"
+  ],
+  "author": "Todo App Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@babel/preset-env": "^7.28.3",
+    "@babel/preset-react": "^7.27.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "axe-core": "^4.11.0",
+    "babel-jest": "^30.2.0",
+    "concurrently": "^7.6.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest-axe": "^10.0.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jest-html-reporters": "^3.1.7",
+    "playwright": "^1.56.0",
+    "supertest": "^7.1.4"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

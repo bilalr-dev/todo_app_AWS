@@ -1,4 +1,4 @@
-// User model for database operations v0.4
+// User model for database operations v0.5
 const bcrypt = require('bcryptjs');
 const { query } = require('../config/database');
 const { logger } = require('../utils/logger');
@@ -9,6 +9,7 @@ class User {
     this.username = data.username;
     this.email = data.email;
     this.password_hash = data.password_hash;
+    this.theme_preference = data.theme_preference || 'light';
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
   }
@@ -23,9 +24,9 @@ class User {
       const password_hash = await bcrypt.hash(password, saltRounds);
       
       const result = await query(
-        `INSERT INTO users (username, email, password_hash) 
-         VALUES ($1, $2, $3) 
-         RETURNING id, username, email, created_at, updated_at`,
+        `INSERT INTO users (username, email, password_hash, theme_preference) 
+         VALUES ($1, $2, $3, 'light') 
+         RETURNING id, username, email, theme_preference, created_at, updated_at`,
         [username, email, password_hash]
       );
       
@@ -97,7 +98,7 @@ class User {
   // Update user
   async update(updateData) {
     try {
-      const allowedFields = ['username', 'email'];
+      const allowedFields = ['username', 'email', 'theme_preference'];
       const updates = [];
       const values = [];
       let paramCount = 1;
@@ -169,7 +170,19 @@ class User {
   // Get user without sensitive data
   toJSON() {
     const { password_hash, ...userWithoutPassword } = this;
-    return userWithoutPassword;
+    return {
+      ...userWithoutPassword,
+      is_demo: this.isDemoUser()
+    };
+  }
+
+  // Check if this user is a demo user
+  isDemoUser() {
+    return (
+      this.id === 1 ||
+      this.email === 'demo@todoapp.com' ||
+      this.username === 'demo'
+    );
   }
 
   // Get all users (admin function)

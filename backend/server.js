@@ -1,4 +1,4 @@
-// Main server entry point for Todo App v0.4
+// Main server entry point for Todo App v0.5
 // Express server with JWT authentication and protected routes
 
 const express = require('express');
@@ -15,7 +15,7 @@ const authRoutes = require('./src/routes/auth');
 const todoRoutes = require('./src/routes/todos');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 
 // Security middleware
 app.use(helmet({
@@ -34,7 +34,7 @@ app.use(helmet({
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -45,9 +45,59 @@ app.use(compression());
 app.use(requestLogger);
 app.use(morgan('combined'));
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+// Content type validation middleware
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'DELETE' && req.get('Content-Type') !== 'application/json') {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_CONTENT_TYPE',
+        message: 'Content-Type must be application/json'
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+  next();
+});
+
+// Body parsing middleware with enhanced error handling
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    if (buf.length === 0) return; // Skip parsing for empty bodies
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      throw new Error('Invalid JSON format');
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// JSON parsing error handler
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: 'Invalid JSON format'
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+  if (error.message && error.message.includes('JSON')) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: 'Invalid JSON format'
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+  next(error);
+});
 
 // Health check endpoint with database status
 app.get('/api/health', async (req, res) => {
@@ -86,8 +136,8 @@ app.get('/api/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Todo App API v0.4',
-    version: '0.4.0',
+    message: 'Todo App API v0.5',
+    version: '0.5.0',
     endpoints: {
       health: '/api/health',
       auth: '/api/auth',
@@ -187,7 +237,10 @@ server.on('error', (err) => {
   } else {
     console.error('❌ Server error:', err);
   }
-  process.exit(1);
+  // Don't exit during tests
+  if (process.env.NODE_ENV !== 'test') {
+    process.exit(1);
+  }
 });
 
 module.exports = app;

@@ -111,10 +111,23 @@
     @apply border-border;
   }
   
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
   }
+  
+  #root {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+  
+          body {
+            @apply bg-background text-foreground;
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            font-feature-settings: "rlig" 1, "calt" 1;
+          }
   
   html {
     scroll-behavior: smooth;
@@ -228,29 +241,121 @@
     @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
   }
   
-  /* Animation classes */
+  /* Theme transition classes removed for instant switching */
+  
+  /* Clean Modern Icon Styles */
+  .icon-modern {
+    @apply transition-all duration-200 ease-out;
+  }
+  
+  .icon-modern:hover {
+    transform: translateY(-1px);
+    opacity: 0.8;
+  }
+  
+  .icon-modern-sm {
+    @apply h-4 w-4 icon-modern;
+  }
+  
+  .icon-modern-md {
+    @apply h-5 w-5 icon-modern;
+  }
+  
+  .icon-modern-lg {
+    @apply h-6 w-6 icon-modern;
+  }
+  
+  .icon-modern-xl {
+    @apply h-8 w-8 icon-modern;
+  }
+  
+  /* Simple icon glow effect */
+  .icon-glow {
+    @apply transition-all duration-200 ease-out;
+  }
+  
+  .icon-glow:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+  
+  /* Clean icon button style */
+  .icon-button {
+    @apply transition-all duration-200 ease-out hover:bg-accent/50 rounded-md p-1;
+  }
+  
+  .icon-button:hover {
+    transform: translateY(-1px);
+  }
+  
+  /* Simple icon background */
+  .icon-bg {
+    @apply rounded-lg p-2 transition-all duration-200 ease-out;
+    background: rgba(0, 0, 0, 0.05);
+  }
+  
+  .icon-bg:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+  }
+  
+  /* Custom Select Styling */
+  .custom-select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+    background-color: transparent !important;
+  }
+  
+  .custom-select::-ms-expand {
+    display: none !important;
+  }
+  
+  /* Additional select styling for better browser support */
+  select.custom-select {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    background-image: none !important;
+  }
+  
+  select.custom-select::-ms-expand {
+    display: none !important;
+  }
+  
+  /* Smooth icon transitions */
+  .icon-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .icon-transition-fast {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Animation classes - using custom CSS instead of @apply to avoid circular dependencies */
   .animate-in {
-    @apply animate-in fade-in-0 zoom-in-95 duration-200;
+    animation: fadeIn 0.2s ease-out;
   }
   
   .animate-out {
-    @apply animate-out fade-out-0 zoom-out-95 duration-150;
+    animation: fadeOut 0.15s ease-in;
   }
   
   .slide-in-from-top {
-    @apply slide-in-from-top-2;
+    animation: slideInFromTop 0.2s ease-out;
   }
   
   .slide-in-from-bottom {
-    @apply slide-in-from-bottom-2;
+    animation: slideInFromBottom 0.2s ease-out;
   }
   
   .slide-in-from-left {
-    @apply slide-in-from-left-2;
+    animation: slideInFromLeft 0.2s ease-out;
   }
   
   .slide-in-from-right {
-    @apply slide-in-from-right-2;
+    animation: slideInFromRight 0.2s ease-out;
   }
   
   /* Glass morphism effect */
@@ -260,6 +365,33 @@
   
   .glass-dark {
     @apply bg-black/10 backdrop-blur-md border border-black/20;
+  }
+  
+  /* Statistics card glass effect */
+  .stats-card-glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+  
+  .dark .stats-card-glass {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+  
+  .stats-card-glass:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  }
+  
+  .dark .stats-card-glass:hover {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   }
   
   /* Gradient backgrounds */
@@ -363,6 +495,61 @@
   50% {
     transform: translateY(0);
     animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 

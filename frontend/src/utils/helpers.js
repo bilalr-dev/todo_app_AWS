@@ -19,6 +19,11 @@ export const formatDate = (date, options = {}) => {
   return new Date(date).toLocaleDateString('en-US', { ...defaultOptions, ...options });
 };
 
+// Get today's date in user's timezone as YYYY-MM-DD format
+export const getTodayInUserTimezone = () => {
+  return new Date().toLocaleDateString('en-CA');
+};
+
 export const formatDateTime = (date, options = {}) => {
   if (!date) return '';
   

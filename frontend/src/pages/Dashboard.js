@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTodos } from '../context/TodoContext';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
@@ -6,6 +6,9 @@ import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Badge, PriorityBadge } from '../components/common/Badge';
 import { LoadingSkeleton } from '../components/common/Loading';
+import DatePicker from '../components/common/DatePicker';
+import ConfirmDialog from '../components/common/ConfirmDialog';
+import CustomSelect from '../components/common/CustomSelect';
 import { 
   Plus, 
   Search, 
@@ -16,9 +19,10 @@ import {
   Circle,
   Edit,
   Trash2,
-  Star
+  AlertTriangle,
+  ClipboardList
 } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime, isToday, isTomorrow, isOverdue } from '../utils/helpers';
+import { cn, formatDate, formatRelativeTime, isToday, isTomorrow, isOverdue, getTodayInUserTimezone } from '../utils/helpers';
 import { TODO_CONFIG } from '../utils/constants';
 
 const Dashboard = () => {
@@ -26,15 +30,12 @@ const Dashboard = () => {
     filteredTodos,
     stats,
     filters,
-    sortBy,
-    sortDirection,
     isLoading,
     createTodo,
     updateTodo,
     deleteTodo,
     toggleTodo,
     setFilters,
-    setSort,
     clearFilters,
   } = useTodos();
   
@@ -45,16 +46,18 @@ const Dashboard = () => {
   const [newTodo, setNewTodo] = useState({
     title: '',
     description: '',
-    priority: 'medium',
+    priority: 'low', // Default priority changed to low
     category: '',
-    due_date: '',
+    due_date: getTodayInUserTimezone(), // Default to today in user's timezone
   });
   const [editingTodo, setEditingTodo] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, todo: null });
 
-  // Load todos on component mount
-  useEffect(() => {
-    // Todos are loaded by the TodoProvider
-  }, []);
+
+  // Handle filter search changes (dashboard search)
+  const handleFilterChange = (key, value) => {
+    setFilters({ ...filters, [key]: value });
+  };
 
   const handleCreateTodo = async (e) => {
     e.preventDefault();
@@ -66,9 +69,9 @@ const Dashboard = () => {
       setNewTodo({
         title: '',
         description: '',
-        priority: 'medium',
+        priority: 'low', // Default priority changed to low
         category: '',
-        due_date: '',
+        due_date: getTodayInUserTimezone(), // Default to today in user's timezone
       });
       setShowNewTodo(false);
     }
@@ -78,10 +81,19 @@ const Dashboard = () => {
     await toggleTodo(id);
   };
 
-  const handleDeleteTodo = async (id) => {
-    if (window.confirm('Are you sure you want to delete this todo?')) {
-      await deleteTodo(id);
+  const handleDeleteTodo = (todo) => {
+    setDeleteConfirm({ isOpen: true, todo });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteConfirm.todo) {
+      await deleteTodo(deleteConfirm.todo.id);
+      setDeleteConfirm({ isOpen: false, todo: null });
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirm({ isOpen: false, todo: null });
   };
 
   const handleEditTodo = (todo) => {
@@ -91,7 +103,7 @@ const Dashboard = () => {
       description: todo.description || '',
       priority: todo.priority,
       category: todo.category || '',
-      due_date: todo.due_date ? new Date(todo.due_date).toISOString().split('T')[0] : '',
+      due_date: todo.due_date ? new Date(todo.due_date).toLocaleDateString('en-CA') : getTodayInUserTimezone(),
     });
     setShowNewTodo(true);
   };
@@ -107,21 +119,12 @@ const Dashboard = () => {
       setNewTodo({
         title: '',
         description: '',
-        priority: 'medium',
+        priority: 'low', // Default priority changed to low
         category: '',
-        due_date: '',
+        due_date: getTodayInUserTimezone(), // Default to today in user's timezone
       });
       setShowNewTodo(false);
     }
-  };
-
-  const handleFilterChange = (key, value) => {
-    setFilters({ [key]: value });
-  };
-
-  const handleSortChange = (field) => {
-    const newDirection = sortBy === field && sortDirection === 'asc' ? 'desc' : 'asc';
-    setSort(field, newDirection);
   };
 
   const getDueDateInfo = (dueDate) => {
@@ -143,8 +146,8 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto px-4 py-8">
+    <div className="p-6">
+      <div className="container mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
@@ -157,57 +160,57 @@ const Dashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="hover:shadow-lg transition-shadow duration-200">
+          <Card className="stats-card-glass transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Todos</p>
-                  <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                  <p className="text-2xl font-bold text-foreground">{Number(stats.total)}</p>
                 </div>
-                <div className="h-12 w-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="h-6 w-6 text-primary" />
+                <div className="icon-bg bg-purple-100 dark:bg-purple-900/30">
+                  <ClipboardList className="icon-modern-lg text-purple-600 dark:text-purple-300" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow duration-200">
+          <Card className="stats-card-glass transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold text-success-600">{stats.completed}</p>
+                  <p className="text-2xl font-bold text-success-600">{Number(stats.completed)}</p>
                 </div>
-                <div className="h-12 w-12 bg-success-100 dark:bg-success-900/20 rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="h-6 w-6 text-success-600" />
+                <div className="icon-bg bg-green-100 dark:bg-green-900/30">
+                  <CheckCircle2 className="icon-modern-lg text-green-600 dark:text-green-300" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow duration-200">
+          <Card className="stats-card-glass transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold text-warning-600">{stats.pending}</p>
+                  <p className="text-2xl font-bold text-warning-600">{Number(stats.pending)}</p>
                 </div>
-                <div className="h-12 w-12 bg-warning-100 dark:bg-warning-900/20 rounded-lg flex items-center justify-center">
-                  <Circle className="h-6 w-6 text-warning-600" />
+                <div className="icon-bg bg-yellow-100 dark:bg-yellow-900/30">
+                  <Circle className="icon-modern-lg text-yellow-600 dark:text-yellow-300" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow duration-200">
+          <Card className="stats-card-glass transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">High Priority</p>
-                  <p className="text-2xl font-bold text-error-600">{stats.high_priority}</p>
+                  <p className="text-2xl font-bold text-error-600">{Number(stats.high_priority)}</p>
                 </div>
-                <div className="h-12 w-12 bg-error-100 dark:bg-error-900/20 rounded-lg flex items-center justify-center">
-                  <Star className="h-6 w-6 text-error-600" />
+                <div className="icon-bg bg-red-100 dark:bg-red-900/30">
+                  <AlertTriangle className="icon-modern-lg text-red-600 dark:text-red-300" />
                 </div>
               </div>
             </CardContent>
@@ -242,7 +245,7 @@ const Dashboard = () => {
               onClick={() => setShowNewTodo(true)}
               className="flex items-center gap-2"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="icon-modern-sm" />
               New Todo
             </Button>
           </div>
@@ -338,7 +341,11 @@ const Dashboard = () => {
               <CardContent>
                 <form onSubmit={editingTodo ? handleUpdateTodo : handleCreateTodo} className="space-y-4">
                   <Input
-                    label="Title"
+                    label={
+                      <span>
+                        Title <span className="text-red-500">*</span>
+                      </span>
+                    }
                     placeholder="What needs to be done?"
                     value={newTodo.title}
                     onChange={(e) => setNewTodo({ ...newTodo, title: e.target.value })}
@@ -356,44 +363,41 @@ const Dashboard = () => {
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Priority</label>
-                      <select
-                        value={newTodo.priority}
-                        onChange={(e) => setNewTodo({ ...newTodo, priority: e.target.value })}
-                        className="w-full p-2 border border-input rounded-md bg-background"
-                      >
-                        {TODO_CONFIG.PRIORITIES.map(priority => (
-                          <option key={priority.value} value={priority.value}>
-                            {priority.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <CustomSelect
+                      label={
+                        <span>
+                          Priority <span className="text-red-500">*</span>
+                        </span>
+                      }
+                      value={newTodo.priority}
+                      onChange={(value) => setNewTodo({ ...newTodo, priority: value })}
+                      options={TODO_CONFIG.PRIORITIES}
+                      placeholder="Select priority"
+                    />
                     
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Category</label>
-                      <select
-                        value={newTodo.category}
-                        onChange={(e) => setNewTodo({ ...newTodo, category: e.target.value })}
-                        className="w-full p-2 border border-input rounded-md bg-background"
-                      >
-                        <option value="">Select category</option>
-                        {TODO_CONFIG.CATEGORIES.map(category => (
-                          <option key={category.value} value={category.value}>
-                            {category.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <CustomSelect
+                      label="Category"
+                      value={newTodo.category}
+                      onChange={(value) => setNewTodo({ ...newTodo, category: value })}
+                      options={[
+                        { value: '', label: 'Select category' },
+                        ...TODO_CONFIG.CATEGORIES
+                      ]}
+                      placeholder="Select category"
+                    />
                   </div>
                   
-                  <Input
-                    label="Due Date"
-                    type="date"
-                    value={newTodo.due_date}
-                    onChange={(e) => setNewTodo({ ...newTodo, due_date: e.target.value })}
-                  />
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Due Date <span className="text-red-500">*</span>
+                    </label>
+                    <DatePicker
+                      value={newTodo.due_date}
+                      onChange={(date) => setNewTodo({ ...newTodo, due_date: date })}
+                      placeholder="Select due date"
+                      minDate={getTodayInUserTimezone()}
+                    />
+                  </div>
                   
                   <div className="flex justify-end gap-2">
                     <Button
@@ -405,7 +409,7 @@ const Dashboard = () => {
                         setNewTodo({
                           title: '',
                           description: '',
-                          priority: 'medium',
+                          priority: 'low', // Default priority changed to low
                           category: '',
                           due_date: '',
                         });
@@ -423,6 +427,34 @@ const Dashboard = () => {
           </div>
         )}
 
+
+        {/* Search Indicator */}
+        {filters.search && (
+          <Card className="mb-4">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Search className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    Search: <span className="font-medium text-foreground">"{filters.search}"</span>
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    {filteredTodos.length} result{filteredTodos.length !== 1 ? 's' : ''}
+                  </Badge>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleFilterChange('search', '')}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear search
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Todos List */}
         <div className="space-y-4">
           {isLoading ? (
@@ -431,25 +463,29 @@ const Dashboard = () => {
                 <LoadingSkeleton key={i} lines={2} className="h-20" />
               ))}
             </div>
-          ) : filteredTodos.length === 0 ? (
+                  ) : filteredTodos.length === 0 ? (
             <Card>
               <CardContent className="p-12 text-center">
                 <div className="mx-auto h-12 w-12 bg-muted rounded-lg flex items-center justify-center mb-4">
                   <CheckCircle2 className="h-6 w-6 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">No todos found</h3>
-                <p className="text-muted-foreground mb-4">
-                  {filters.search || filters.priority !== 'all' || filters.category !== 'all' || filters.completed !== 'all' || filters.dueDate !== 'all'
-                    ? 'Try adjusting your filters to see more todos'
-                    : 'Get started by creating your first todo'
-                  }
-                </p>
-                {!filters.search && filters.priority === 'all' && filters.category === 'all' && filters.completed === 'all' && filters.dueDate === 'all' && (
-                  <Button onClick={() => setShowNewTodo(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Todo
-                  </Button>
-                )}
+                        <h3 className="text-lg font-semibold text-foreground mb-2">
+                          {filters.search ? 'No search results found' : 'No todos found'}
+                        </h3>
+                        <p className="text-muted-foreground mb-4">
+                          {filters.search
+                            ? `No todos match your search for "${filters.search}". Try a different search term.`
+                            : filters.priority !== 'all' || filters.category !== 'all' || filters.completed !== 'all' || filters.dueDate !== 'all'
+                              ? 'Try adjusting your filters to see more todos'
+                              : 'Get started by creating your first todo'
+                          }
+                        </p>
+                        {!filters.search && filters.priority === 'all' && filters.category === 'all' && filters.completed === 'all' && filters.dueDate === 'all' && (
+                          <Button onClick={() => setShowNewTodo(true)}>
+                            <Plus className="icon-modern-sm mr-2" />
+                            Create Todo
+                          </Button>
+                        )}
               </CardContent>
             </Card>
           ) : (
@@ -463,12 +499,12 @@ const Dashboard = () => {
                       <div className="flex items-start space-x-3 flex-1">
                         <button
                           onClick={() => handleToggleTodo(todo.id)}
-                          className="mt-1 hover:scale-110 transition-transform duration-200"
+                          className="mt-1 icon-button hover:scale-110 transition-all duration-200"
                         >
                           {todo.completed ? (
-                            <CheckCircle2 className="h-5 w-5 text-success-600" />
+                            <CheckCircle2 className="icon-modern-md text-success-600" />
                           ) : (
-                            <Circle className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+                            <Circle className="icon-modern-md text-muted-foreground hover:text-foreground" />
                           )}
                         </button>
                         
@@ -520,16 +556,16 @@ const Dashboard = () => {
                           size="sm"
                           onClick={() => handleEditTodo(todo)}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="icon-modern-sm" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteTodo(todo.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteTodo(todo)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="icon-modern-sm" />
+                              </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -539,6 +575,18 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        title="Delete Todo"
+        message={`Are you sure you want to delete "${deleteConfirm.todo?.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 };

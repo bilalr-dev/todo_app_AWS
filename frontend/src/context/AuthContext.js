@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import { authAPI } from '../services/api';
 import { useToast } from './ToastContext';
 
 // Initial state
 const initialState = {
   user: null,
-  token: localStorage.getItem('token') || null,
-  refreshToken: localStorage.getItem('refreshToken') || null,
+  token: null,
+  refreshToken: null,
   isAuthenticated: false,
   isLoading: true,
   error: null,
@@ -123,7 +123,11 @@ export const AuthProvider = ({ children }) => {
   // Check if user is authenticated on app load
   useEffect(() => {
     const checkAuth = async () => {
-      if (state.token) {
+      const token = localStorage.getItem('token');
+      const refreshTokenValue = localStorage.getItem('refreshToken');
+      
+      
+      if (token) {
         try {
           const response = await authAPI.getProfile();
           if (response.success) {
@@ -131,21 +135,34 @@ export const AuthProvider = ({ children }) => {
               type: AUTH_ACTIONS.LOGIN_SUCCESS,
               payload: {
                 user: response.data.user,
-                token: state.token,
-                refreshToken: state.refreshToken,
+                token: token,
+                refreshToken: refreshTokenValue,
               },
             });
           } else {
-            // Token is invalid, try to refresh
-            if (state.refreshToken) {
-              await refreshToken();
-            } else {
-              logout();
-            }
+            // Token is invalid, clear it
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
           }
         } catch (error) {
-          console.error('Auth check failed:', error);
-          logout();
+          // Handle different types of errors
+          if (error.response?.status === 401) {
+            // Token is invalid or expired, clear it silently
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+          } else if (error.response?.status >= 500) {
+            // Server error, keep token but set loading to false
+            console.error('Server error during auth check:', error);
+            dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+          } else {
+            // Other errors (network, etc.)
+            console.error('Auth check failed:', error);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+          }
         }
       } else {
         dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
@@ -157,21 +174,24 @@ export const AuthProvider = ({ children }) => {
 
   // Save tokens to localStorage when they change
   useEffect(() => {
-    if (state.token) {
-      localStorage.setItem('token', state.token);
-    } else {
-      localStorage.removeItem('token');
+    // Only manage localStorage after initial auth check is complete
+    if (!state.isLoading) {
+      if (state.token) {
+        localStorage.setItem('token', state.token);
+      } else {
+        localStorage.removeItem('token');
+      }
+      
+      if (state.refreshToken) {
+        localStorage.setItem('refreshToken', state.refreshToken);
+      } else {
+        localStorage.removeItem('refreshToken');
+      }
     }
-    
-    if (state.refreshToken) {
-      localStorage.setItem('refreshToken', state.refreshToken);
-    } else {
-      localStorage.removeItem('refreshToken');
-    }
-  }, [state.token, state.refreshToken]);
+  }, [state.token, state.refreshToken, state.isLoading]);
 
   // Login function
-  const login = async (credentials) => {
+  const login = useCallback(async (credentials) => {
     dispatch({ type: AUTH_ACTIONS.LOGIN_START });
     
     try {
@@ -204,10 +224,10 @@ export const AuthProvider = ({ children }) => {
       showToast(errorMessage, 'error');
       return { success: false, error: errorMessage };
     }
-  };
+  }, [showToast]);
 
   // Register function
-  const register = async (userData) => {
+  const register = useCallback(async (userData) => {
     dispatch({ type: AUTH_ACTIONS.REGISTER_START });
     
     try {
@@ -240,10 +260,10 @@ export const AuthProvider = ({ children }) => {
       showToast(errorMessage, 'error');
       return { success: false, error: errorMessage };
     }
-  };
+  }, [showToast]);
 
   // Logout function
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       if (state.token) {
         await authAPI.logout();
@@ -254,10 +274,10 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
       showToast('Logged out successfully', 'info');
     }
-  };
+  }, [state.token, showToast]);
 
   // Refresh token function
-  const refreshToken = async () => {
+  const refreshToken = useCallback(async () => {
     if (!state.refreshToken) {
       logout();
       return false;
@@ -281,10 +301,10 @@ export const AuthProvider = ({ children }) => {
       logout();
       return false;
     }
-  };
+  }, [state.refreshToken, logout]);
 
   // Update profile function
-  const updateProfile = async (profileData) => {
+  const updateProfile = useCallback(async (profileData, showNotification = true) => {
     try {
       const response = await authAPI.updateProfile(profileData);
       
@@ -294,26 +314,33 @@ export const AuthProvider = ({ children }) => {
           payload: response.data.user,
         });
         
-        showToast('Profile updated successfully!', 'success');
+        // Only show toast notification if explicitly requested
+        if (showNotification) {
+          showToast('Profile updated successfully!', 'success');
+        }
         return { success: true };
       } else {
-        showToast(response.error?.message || 'Profile update failed', 'error');
+        if (showNotification) {
+          showToast(response.error?.message || 'Profile update failed', 'error');
+        }
         return { success: false, error: response.error?.message };
       }
     } catch (error) {
       const errorMessage = error.response?.data?.error?.message || 'Profile update failed';
-      showToast(errorMessage, 'error');
+      if (showNotification) {
+        showToast(errorMessage, 'error');
+      }
       return { success: false, error: errorMessage };
     }
-  };
+  }, [showToast]);
 
   // Clear error function
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
-  };
+  }, []);
 
   // Context value
-  const value = {
+  const value = useMemo(() => ({
     ...state,
     login,
     register,
@@ -321,7 +348,7 @@ export const AuthProvider = ({ children }) => {
     refreshToken,
     updateProfile,
     clearError,
-  };
+  }), [state, login, register, logout, refreshToken, updateProfile, clearError]);
 
   return (
     <AuthContext.Provider value={value}>

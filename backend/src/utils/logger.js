@@ -1,4 +1,4 @@
-// Logging utilities for v0.4
+// Logging utilities for v0.5
 const winston = require('winston');
 const path = require('path');
 

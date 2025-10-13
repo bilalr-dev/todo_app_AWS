@@ -26,6 +26,22 @@ async function runMigrations() {
     await client.query(migrationSQL);
     console.log('✅ Migration 001_initial_schema.sql completed successfully');
     
+    // Read and execute additional migrations
+    const migrations = [
+      '002_add_advanced_features.sql',
+      '003_optimize_indexes.sql',
+      '004_update_demo_user.sql'
+    ];
+    
+    for (const migrationFile of migrations) {
+      const migrationPath = path.join(__dirname, 'migrations', migrationFile);
+      if (fs.existsSync(migrationPath)) {
+        const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+        await client.query(migrationSQL);
+        console.log(`✅ Migration ${migrationFile} completed successfully`);
+      }
+    }
+    
     console.log('🎉 All migrations completed successfully!');
   } catch (error) {
     console.error('❌ Migration failed:', error.message);

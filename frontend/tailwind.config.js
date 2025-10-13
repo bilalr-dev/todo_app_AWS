@@ -194,7 +194,7 @@ module.exports = {
         "glow": "glow 2s ease-in-out infinite",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["Montserrat", "Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       spacing: {

@@ -1,0 +1,148 @@
+# Artillery.js configuration for load testing
+config:
+  target: 'http://localhost:5002'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 10
+      name: "Ramp up load"
+    - duration: 300
+      arrivalRate: 20
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 5
+      name: "Ramp down"
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+  plugins:
+    metrics-by-endpoint: {}
+  ensure:
+    p95: 1000
+    p99: 2000
+    maxErrorRate: 1
+
+scenarios:
+  - name: "User Registration and Login Flow"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/auth/register"
+          json:
+            username: "loadtest{{ $randomString() }}"
+            email: "loadtest{{ $randomString() }}@example.com"
+            password: "LoadTest123"
+            confirmPassword: "LoadTest123"
+          capture:
+            - json: "$.data.token"
+              as: "authToken"
+            - json: "$.data.user.id"
+              as: "userId"
+      - get:
+          url: "/api/auth/profile"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - post:
+          url: "/api/auth/logout"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  - name: "Todo Management Flow"
+    weight: 40
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "demo@todoapp.com"
+            password: "demo123"
+          capture:
+            - json: "$.data.token"
+              as: "authToken"
+      - get:
+          url: "/api/todos"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - post:
+          url: "/api/todos"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            title: "Load Test Todo {{ $randomString() }}"
+            description: "This is a load test todo"
+            priority: "medium"
+            category: "work"
+            due_date: "2024-12-31"
+          capture:
+            - json: "$.data.todo.id"
+              as: "todoId"
+      - get:
+          url: "/api/todos/{{ todoId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - put:
+          url: "/api/todos/{{ todoId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            title: "Updated Load Test Todo {{ $randomString() }}"
+            completed: true
+      - patch:
+          url: "/api/todos/{{ todoId }}/toggle"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - delete:
+          url: "/api/todos/{{ todoId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  - name: "Search and Filter Flow"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "demo@todoapp.com"
+            password: "demo123"
+          capture:
+            - json: "$.data.token"
+              as: "authToken"
+      - get:
+          url: "/api/todos/search?q=Getting"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - get:
+          url: "/api/todos?priority=high"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - get:
+          url: "/api/todos?category=work"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - get:
+          url: "/api/todos/stats"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+
+  - name: "Profile Management Flow"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "demo@todoapp.com"
+            password: "demo123"
+          capture:
+            - json: "$.data.token"
+              as: "authToken"
+      - get:
+          url: "/api/auth/profile"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      - put:
+          url: "/api/auth/profile"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            theme_preference: "dark"

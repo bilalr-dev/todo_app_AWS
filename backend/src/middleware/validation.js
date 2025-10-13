@@ -1,6 +1,7 @@
-// Input validation middleware for v0.4
+// Input validation middleware for v0.5
 const { body, validationResult } = require('express-validator');
 const { logger } = require('../utils/logger');
+const { PASSWORD_PATTERN, USERNAME_PATTERN, EMAIL_PATTERN, TODO_RULES } = require('../utils/validation');
 
 // Validation error handler
 const handleValidationErrors = (req, res, next) => {
@@ -30,8 +31,8 @@ const validateUserRegistration = [
   body('username')
     .isLength({ min: 3, max: 30 })
     .withMessage('Username must be between 3 and 30 characters')
-    .matches(/^[a-zA-Z0-9_]+$/)
-    .withMessage('Username can only contain letters, numbers, and underscores'),
+    .matches(USERNAME_PATTERN)
+    .withMessage('Username must contain at least one letter and can only contain letters, numbers, and underscores'),
   
   body('email')
     .isEmail()
@@ -41,8 +42,8 @@ const validateUserRegistration = [
   body('password')
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
+    .matches(PASSWORD_PATTERN)
+    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character'),
   
   handleValidationErrors
 ];
@@ -84,8 +85,15 @@ const validateTodoCreation = [
     .isISO8601()
     .withMessage('Due date must be a valid ISO 8601 date')
     .custom((value) => {
-      if (value && new Date(value) < new Date()) {
-        throw new Error('Due date cannot be in the past');
+      if (value) {
+        const dueDate = new Date(value);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        dueDate.setHours(0, 0, 0, 0); // Reset time to start of day
+        
+        if (dueDate < today) {
+          throw new Error('Due date cannot be in the past');
+        }
       }
       return true;
     }),
@@ -121,7 +129,20 @@ const validateTodoUpdate = [
   body('due_date')
     .optional()
     .isISO8601()
-    .withMessage('Due date must be a valid ISO 8601 date'),
+    .withMessage('Due date must be a valid ISO 8601 date')
+    .custom((value) => {
+      if (value) {
+        const dueDate = new Date(value);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        dueDate.setHours(0, 0, 0, 0); // Reset time to start of day
+        
+        if (dueDate < today) {
+          throw new Error('Due date cannot be in the past');
+        }
+      }
+      return true;
+    }),
   
   body('category')
     .optional()

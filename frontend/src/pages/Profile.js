@@ -1,18 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { User, Mail, Calendar, Save, Edit3 } from 'lucide-react';
+import { User, Mail, Calendar, Save, Edit3, Sun, Moon } from 'lucide-react';
 
 const Profile = () => {
   const { user, updateProfile } = useAuth();
+  const { theme, setThemeMode } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check if user is a demo user
+  const isDemoUser = useMemo(() => {
+    if (!user) return false;
+    
+    // Check for specific demo user
+    return (
+      user.id === 1 ||
+      user.email === 'demo@todoapp.com' ||
+      user.username === 'demo' ||
+      user.is_demo === true // If backend provides this flag
+    );
+  }, [user]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -55,6 +70,25 @@ const Profile = () => {
             <p className="text-muted-foreground">
               Manage your account settings and preferences
             </p>
+            {isDemoUser && (
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                      Demo Account
+                    </h3>
+                    <div className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                      <p>This is a demo account. All profile settings, security options, and preferences are disabled.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Profile Card */}
@@ -71,6 +105,8 @@ const Profile = () => {
                   variant="outline"
                   onClick={() => setIsEditing(!isEditing)}
                   className="flex items-center gap-2"
+                  disabled={isDemoUser}
+                  title={isDemoUser ? "Profile editing is disabled for demo users" : ""}
                 >
                   {isEditing ? (
                     <>
@@ -109,8 +145,8 @@ const Profile = () => {
                   onChange={handleInputChange}
                   name="username"
                   leftIcon={<User className="h-4 w-4" />}
-                  disabled={!isEditing}
-                  helperText="This will be visible to other users"
+                  disabled={!isEditing || isDemoUser}
+                  helperText={isDemoUser ? "Username cannot be changed for demo users" : "This will be visible to other users"}
                 />
                 
                 <Input
@@ -120,8 +156,8 @@ const Profile = () => {
                   onChange={handleInputChange}
                   name="email"
                   leftIcon={<Mail className="h-4 w-4" />}
-                  disabled={!isEditing}
-                  helperText="We'll use this email to contact you"
+                  disabled={!isEditing || isDemoUser}
+                  helperText={isDemoUser ? "Email cannot be changed for demo users" : "We'll use this email to contact you"}
                 />
               </div>
 
@@ -187,10 +223,15 @@ const Profile = () => {
                     <div>
                       <h4 className="font-medium text-foreground">Password</h4>
                       <p className="text-sm text-muted-foreground">
-                        Last updated: Never
+                        {isDemoUser ? "Password changes are disabled for demo users" : "Last updated: Never"}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={isDemoUser}
+                      title={isDemoUser ? "Password changes are disabled for demo users" : ""}
+                    >
                       Change Password
                     </Button>
                   </div>
@@ -199,10 +240,15 @@ const Profile = () => {
                     <div>
                       <h4 className="font-medium text-foreground">Two-Factor Authentication</h4>
                       <p className="text-sm text-muted-foreground">
-                        Add an extra layer of security to your account
+                        {isDemoUser ? "2FA setup is disabled for demo users" : "Add an extra layer of security to your account"}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={isDemoUser}
+                      title={isDemoUser ? "2FA setup is disabled for demo users" : ""}
+                    >
                       Enable 2FA
                     </Button>
                   </div>
@@ -222,12 +268,50 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 border border-border rounded-lg">
                     <div>
-                      <h4 className="font-medium text-foreground">Email Notifications</h4>
+                      <h4 className="font-medium text-foreground">Theme</h4>
                       <p className="text-sm text-muted-foreground">
-                        Receive email updates about your todos
+                        {isDemoUser ? "Theme changes are disabled for demo users" : "Choose your preferred theme"}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={theme === 'light' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => !isDemoUser && setThemeMode('light')}
+                        disabled={isDemoUser}
+                        title={isDemoUser ? "Theme changes are disabled for demo users" : "Switch to light theme"}
+                        className="flex items-center gap-2"
+                      >
+                        <Sun className="h-4 w-4" />
+                        Light
+                      </Button>
+                      <Button
+                        variant={theme === 'dark' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => !isDemoUser && setThemeMode('dark')}
+                        disabled={isDemoUser}
+                        title={isDemoUser ? "Theme changes are disabled for demo users" : "Switch to dark theme"}
+                        className="flex items-center gap-2"
+                      >
+                        <Moon className="h-4 w-4" />
+                        Dark
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                    <div>
+                      <h4 className="font-medium text-foreground">Email Notifications</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {isDemoUser ? "Email notifications are disabled for demo users" : "Receive email updates about your todos"}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={isDemoUser}
+                      title={isDemoUser ? "Email notifications are disabled for demo users" : ""}
+                    >
                       Configure
                     </Button>
                   </div>
@@ -236,10 +320,15 @@ const Profile = () => {
                     <div>
                       <h4 className="font-medium text-foreground">Data Export</h4>
                       <p className="text-sm text-muted-foreground">
-                        Download your todos and account data
+                        {isDemoUser ? "Data export is disabled for demo users" : "Download your todos and account data"}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      disabled={isDemoUser}
+                      title={isDemoUser ? "Data export is disabled for demo users" : ""}
+                    >
                       Export Data
                     </Button>
                   </div>

@@ -21,12 +21,15 @@ import './styles/globals.css';
 
 function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <ThemeProvider>
           <TodoProvider>
-            <Router>
-              <div className="App min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+            <Router future={{
+              v7_startTransition: true,
+              v7_relativeSplatPath: true
+            }}>
+              <div className="App min-h-screen">
                 <Routes>
                   {/* Public Routes */}
                   <Route path="/login" element={<Login />} />
@@ -49,9 +52,9 @@ function App() {
               </div>
             </Router>
           </TodoProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </ThemeProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
