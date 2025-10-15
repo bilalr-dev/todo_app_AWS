@@ -1,4 +1,4 @@
-// Todo model for database operations v0.5
+// Todo model for database operations v0.6
 const { query } = require('../config/database');
 const { logger } = require('../utils/logger');
 
@@ -13,20 +13,25 @@ class Todo {
     this.category = data.category;
     this.position = data.position;
     this.completed = data.completed;
+    this.state = data.state || 'todo';
+    this.file_count = data.file_count || 0;
+    this.attachments = data.attachments || [];
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
+    this.started_at = data.started_at;
+    this.completed_at = data.completed_at;
   }
 
   // Create a new todo
   static async create(todoData) {
     try {
-      const { user_id, title, description, priority, due_date, category } = todoData;
+      const { user_id, title, description, priority, due_date, category, state } = todoData;
       
       const result = await query(
-        `INSERT INTO todos (user_id, title, description, priority, due_date, category) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
+        `INSERT INTO todos (user_id, title, description, priority, due_date, category, state) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) 
          RETURNING *`,
-        [user_id, title, description, priority || 'medium', due_date, category]
+        [user_id, title, description, priority || 'medium', due_date, category, state || 'todo']
       );
       
       logger.info('Todo created successfully', { todoId: result.rows[0].id, userId: user_id });
@@ -114,10 +119,40 @@ class Todo {
   // Update todo
   async update(updateData) {
     try {
-      const allowedFields = ['title', 'description', 'priority', 'due_date', 'category', 'completed', 'position'];
+      const allowedFields = ['title', 'description', 'priority', 'due_date', 'category', 'completed', 'position', 'state'];
       const updates = [];
       const values = [];
       let paramCount = 1;
+
+
+      // Enforce forward-only movement rule for state changes and handle state transition timestamps
+      if (updateData.state !== undefined) {
+        const currentState = this.state || (this.completed ? 'complete' : 'todo');
+        const newState = updateData.state;
+        
+        // Define allowed state transitions (forward-only)
+        const allowedTransitions = {
+          'todo': ['inProgress', 'complete'],
+          'inProgress': ['complete'],
+          'complete': [] // No transitions allowed from complete
+        };
+        
+        // Allow keeping the same state (for updates that don't change state)
+        if (currentState !== newState && !allowedTransitions[currentState]?.includes(newState)) {
+          throw new Error(`Cannot move todo from ${currentState} to ${newState} - forward-only movement is enforced`);
+        }
+        
+        // Handle state transition timestamps
+        if (currentState !== newState) {
+          if (newState === 'inProgress' && !this.started_at) {
+            // First time moving to inProgress - set started_at
+            updates.push('started_at = CURRENT_TIMESTAMP');
+          } else if (newState === 'complete' && !this.completed_at) {
+            // First time moving to complete - set completed_at
+            updates.push('completed_at = CURRENT_TIMESTAMP');
+          }
+        }
+      }
 
       for (const [key, value] of Object.entries(updateData)) {
         if (allowedFields.includes(key)) {
@@ -162,18 +197,45 @@ class Todo {
     }
   }
 
-  // Toggle completion status
+  // Toggle completion status (forward-only: can only mark as complete, cannot unmark)
   async toggleComplete() {
     try {
-      const result = await query(
-        'UPDATE todos SET completed = NOT completed, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+      // Get current state to determine if toggle is allowed
+      const currentResult = await query(
+        'SELECT completed, state FROM todos WHERE id = $1',
         [this.id]
+      );
+      
+      if (currentResult.rows.length === 0) {
+        throw new Error('Todo not found');
+      }
+      
+      const currentCompleted = currentResult.rows[0].completed;
+      const currentState = currentResult.rows[0].state;
+      
+      // Only allow marking as complete, not unmarking
+      if (currentCompleted) {
+        // If already completed, don't allow toggle back to in-progress
+        throw new Error('Cannot unmark completed todo - forward-only movement is enforced');
+      }
+      
+      // Mark as complete
+      const result = await query(
+        'UPDATE todos SET completed = true, state = $2, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+        [this.id, 'complete']
       );
 
       this.completed = result.rows[0].completed;
+      this.state = result.rows[0].state;
       this.updated_at = result.rows[0].updated_at;
+      this.completed_at = result.rows[0].completed_at;
       
-      logger.info('Todo completion toggled', { todoId: this.id, completed: this.completed });
+      logger.info('Todo marked as complete', { 
+        todoId: this.id, 
+        completed: this.completed, 
+        state: this.state,
+        previousState: currentState 
+      });
       return this;
     } catch (error) {
       logger.error('Error toggling todo completion', { error: error.message, todoId: this.id });
@@ -318,10 +380,10 @@ class Todo {
       const result = await query(
         `SELECT 
            COUNT(*) as total,
-           COUNT(CASE WHEN completed = true THEN 1 END) as completed,
-           COUNT(CASE WHEN completed = false THEN 1 END) as pending,
+           COUNT(CASE WHEN (completed = true OR state = 'complete') THEN 1 END) as completed,
+           COUNT(CASE WHEN state = 'inProgress' THEN 1 END) as pending,
            COUNT(CASE WHEN priority = 'high' THEN 1 END) as high_priority,
-           COUNT(CASE WHEN due_date < CURRENT_TIMESTAMP AND completed = false THEN 1 END) as overdue
+           COUNT(CASE WHEN due_date < CURRENT_TIMESTAMP AND (completed = false AND state != 'complete') THEN 1 END) as overdue
          FROM todos WHERE user_id = $1`,
         [userId]
       );
@@ -337,6 +399,275 @@ class Todo {
       };
     } catch (error) {
       logger.error('Error getting todo stats', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  // Get todos with file attachments
+  static async findWithAttachments(userId, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        search = null,
+        priority = null,
+        category = null,
+        status = null,
+        sortBy = 'created_at',
+        sortDirection = 'DESC'
+      } = options;
+
+      const offset = (page - 1) * limit;
+      let whereClause = 'WHERE t.user_id = $1';
+      let params = [userId];
+      let paramCount = 1;
+
+      // Add search filter
+      if (search) {
+        paramCount++;
+        whereClause += ` AND (t.title ILIKE $${paramCount} OR t.description ILIKE $${paramCount})`;
+        params.push(`%${search}%`);
+      }
+
+      // Add priority filter
+      if (priority) {
+        paramCount++;
+        whereClause += ` AND t.priority = $${paramCount}`;
+        params.push(priority);
+      }
+
+      // Add category filter
+      if (category) {
+        paramCount++;
+        whereClause += ` AND t.category = $${paramCount}`;
+        params.push(category);
+      }
+
+      // Add status filter
+      if (status === 'completed') {
+        whereClause += ` AND t.completed = true`;
+      } else if (status === 'pending') {
+        whereClause += ` AND t.completed = false`;
+      }
+
+      const result = await query(
+        `SELECT t.*, 
+                COALESCE(
+                  json_agg(
+                    json_build_object(
+                      'id', fa.id,
+                      'filename', fa.filename,
+                      'original_name', fa.original_name,
+                      'file_path', fa.file_path,
+                      'file_size', fa.file_size,
+                      'mime_type', fa.mime_type,
+                      'file_type', fa.file_type,
+                      'thumbnail_path', fa.thumbnail_path,
+                      'created_at', fa.created_at
+                    )
+                  ) FILTER (WHERE fa.id IS NOT NULL), 
+                  '[]'
+                ) as attachments
+         FROM todos t
+         LEFT JOIN file_attachments fa ON t.id = fa.todo_id
+         ${whereClause}
+         GROUP BY t.id
+         ORDER BY t.${sortBy} ${sortDirection}
+         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+        [...params, limit, offset]
+      );
+
+      // Get total count
+      const countResult = await query(
+        `SELECT COUNT(DISTINCT t.id) as total
+         FROM todos t
+         ${whereClause}`,
+        params
+      );
+
+      const total = parseInt(countResult.rows[0].total);
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        todos: result.rows.map(row => new Todo(row)),
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      };
+    } catch (error) {
+      logger.error('Error finding todos with attachments', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  // Get file attachments for this todo
+  async getAttachments() {
+    try {
+      const FileAttachment = require('./FileAttachment');
+      return await FileAttachment.findByTodoId(this.id);
+    } catch (error) {
+      logger.error('Error getting attachments for todo', { error: error.message, todoId: this.id });
+      throw error;
+    }
+  }
+
+  // Advanced filtering with multiple criteria
+  static async findWithAdvancedFilters(userId, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        search = null,
+        priority = null,
+        category = null,
+        status = null,
+        startDate = null,
+        endDate = null,
+        dueStartDate = null,
+        dueEndDate = null,
+        hasFiles = null,
+        sortBy = 'created_at',
+        sortDirection = 'DESC'
+      } = options;
+
+      const offset = (page - 1) * limit;
+      let whereClause = 'WHERE t.user_id = $1';
+      let params = [userId];
+      let paramCount = 1;
+
+      // Add search filter
+      if (search) {
+        paramCount++;
+        whereClause += ` AND (t.title ILIKE $${paramCount} OR t.description ILIKE $${paramCount})`;
+        params.push(`%${search}%`);
+      }
+
+      // Add priority filter (can be array)
+      if (priority) {
+        if (Array.isArray(priority)) {
+          paramCount++;
+          whereClause += ` AND t.priority = ANY($${paramCount})`;
+          params.push(priority);
+        } else {
+          paramCount++;
+          whereClause += ` AND t.priority = $${paramCount}`;
+          params.push(priority);
+        }
+      }
+
+      // Add category filter (can be array)
+      if (category) {
+        if (Array.isArray(category)) {
+          paramCount++;
+          whereClause += ` AND t.category = ANY($${paramCount})`;
+          params.push(category);
+        } else {
+          paramCount++;
+          whereClause += ` AND t.category = $${paramCount}`;
+          params.push(category);
+        }
+      }
+
+      // Add status filter
+      if (status === 'completed') {
+        whereClause += ` AND t.completed = true`;
+      } else if (status === 'pending') {
+        whereClause += ` AND t.completed = false`;
+      }
+
+      // Add date range filters
+      if (startDate) {
+        paramCount++;
+        whereClause += ` AND t.created_at >= $${paramCount}`;
+        params.push(startDate);
+      }
+
+      if (endDate) {
+        paramCount++;
+        whereClause += ` AND t.created_at <= $${paramCount}`;
+        params.push(endDate);
+      }
+
+      if (dueStartDate) {
+        paramCount++;
+        whereClause += ` AND t.due_date >= $${paramCount}`;
+        params.push(dueStartDate);
+      }
+
+      if (dueEndDate) {
+        paramCount++;
+        whereClause += ` AND t.due_date <= $${paramCount}`;
+        params.push(dueEndDate);
+      }
+
+      // Add file filter
+      if (hasFiles === 'true') {
+        whereClause += ` AND t.file_count > 0`;
+      } else if (hasFiles === 'false') {
+        whereClause += ` AND t.file_count = 0`;
+      }
+
+      // Validate sortBy
+      const allowedSortFields = ['created_at', 'updated_at', 'due_date', 'title', 'priority', 'category'];
+      const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
+      const validSortDirection = ['ASC', 'DESC'].includes(sortDirection.toUpperCase()) ? sortDirection.toUpperCase() : 'DESC';
+
+      const result = await query(
+        `SELECT t.*, 
+                COALESCE(
+                  json_agg(
+                    json_build_object(
+                      'id', fa.id,
+                      'filename', fa.filename,
+                      'original_name', fa.original_name,
+                      'file_path', fa.file_path,
+                      'file_size', fa.file_size,
+                      'mime_type', fa.mime_type,
+                      'file_type', fa.file_type,
+                      'thumbnail_path', fa.thumbnail_path,
+                      'created_at', fa.created_at
+                    )
+                  ) FILTER (WHERE fa.id IS NOT NULL), 
+                  '[]'
+                ) as attachments
+         FROM todos t
+         LEFT JOIN file_attachments fa ON t.id = fa.todo_id
+         ${whereClause}
+         GROUP BY t.id
+         ORDER BY t.${validSortBy} ${validSortDirection}
+         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
+        [...params, limit, offset]
+      );
+
+      // Get total count
+      const countResult = await query(
+        `SELECT COUNT(DISTINCT t.id) as total
+         FROM todos t
+         ${whereClause}`,
+        params
+      );
+
+      const total = parseInt(countResult.rows[0].total);
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        todos: result.rows.map(row => new Todo(row)),
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      };
+    } catch (error) {
+      logger.error('Error finding todos with advanced filters', { error: error.message, userId });
       throw error;
     }
   }

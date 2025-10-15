@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Load environment variables from backend directory
-require('dotenv').config({ path: path.join(__dirname, 'backend/.env') });
+require('dotenv').config({ path: path.join(__dirname, '../backend/.env') });
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -30,7 +30,11 @@ async function runMigrations() {
     const migrations = [
       '002_add_advanced_features.sql',
       '003_optimize_indexes.sql',
-      '004_update_demo_user.sql'
+      '004_add_todo_state.sql',
+      '004_update_demo_user.sql',
+      '005_add_theme_preference.sql',
+      '006_add_file_attachments.sql',
+      '007_add_state_timestamps.sql'
     ];
     
     for (const migrationFile of migrations) {

@@ -156,6 +156,25 @@ class User {
     }
   }
 
+  // Update password
+  async updatePassword(newPassword) {
+    try {
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+      
+      const updateQuery = 'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2';
+      await query(updateQuery, [hashedPassword, this.id]);
+      
+      // Update the instance
+      this.password_hash = hashedPassword;
+      
+      logger.info('Password updated successfully', { userId: this.id });
+    } catch (error) {
+      logger.error('Error updating password', { error: error.message, userId: this.id });
+      throw error;
+    }
+  }
+
   // Update last login (placeholder for future implementation)
   async updateLastLogin() {
     try {

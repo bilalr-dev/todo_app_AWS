@@ -1,12 +1,12 @@
-# Todo Application v0.5
+# Todo Application v0.6+
 
-A modern, full-stack todo application built with React, Express.js, and PostgreSQL. This project demonstrates clean architecture, secure authentication, modern web development practices, and comprehensive testing.
+A modern, full-stack todo application built with React, Express.js, and PostgreSQL. This project demonstrates clean architecture, secure authentication, modern web development practices, comprehensive testing, and advanced features including file management, bulk operations, and Kanban board functionality.
 
 ## 🔗 **Repository**
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-blue?style=for-the-badge&logo=github)](https://github.com/bilalr-dev/todo_app_AWS)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-v0.5.0-orange?style=for-the-badge)](https://github.com/bilalr-dev/todo_app_AWS/releases)
+[![Version](https://img.shields.io/badge/Version-v0.6+-orange?style=for-the-badge)](https://github.com/bilalr-dev/todo_app_AWS/releases)
 
 **GitHub**: [https://github.com/bilalr-dev/todo_app_AWS](https://github.com/bilalr-dev/todo_app_AWS)
 
@@ -16,11 +16,11 @@ git clone https://github.com/bilalr-dev/todo_app_AWS.git
 cd todo_app_AWS
 ```
 
-## 🚀 **Current Version: v0.5 - Enhanced Todo Application with Testing**
+## 🚀 **Current Version: v0.6+ - Advanced Todo Application with File Management**
 
-**Status**: ✅ **COMPLETED WITH COMPREHENSIVE TESTING SUITE**
+**Status**: ✅ **PRODUCTION-READY WITH ADVANCED FEATURES**
 
-### **Key Features**
+### **Core Features**
 - ✅ **Modern React Frontend** with responsive design and dark/light themes
 - ✅ **Express.js Backend API** with RESTful endpoints and comprehensive logging
 - ✅ **PostgreSQL Database** with optimized schema and indexing
@@ -29,11 +29,22 @@ cd todo_app_AWS
 - ✅ **Advanced Search & Filtering** with real-time updates
 - ✅ **Priority & Category System** with visual indicators
 - ✅ **Due Date Management** with timezone support and notifications
-- ✅ **User Profile Management** with theme preferences
+- ✅ **User Profile Management** with theme preferences and password change
 - ✅ **Responsive Design** with mobile-first approach
-- ✅ **Comprehensive Testing Suite** with unit, integration, and UI tests
+- ✅ **Comprehensive Testing Suite** with 80+ unit tests and automated reporting
 - ✅ **Demo Account** for easy testing and demonstration
 - ✅ **Modern UI Components** with glassmorphism effects and animations
+
+### **Advanced Features (v0.6+)**
+- ✅ **File Upload System** with multiple file types, thumbnails, and management
+- ✅ **Bulk Operations** with multi-select and batch actions
+- ✅ **Kanban Board** with drag-and-drop functionality and state management
+- ✅ **Export Functionality** with multiple format support
+- ✅ **Advanced Search** with multi-criteria filtering and date ranges
+- ✅ **Forward-Only Workflow** with proper state transitions
+- ✅ **File Attachments** with preview, download, and deletion
+- ✅ **Smart Selection** with intelligent bulk action filtering
+- ✅ **Enhanced Security** with password strength validation and hashing
 
 ## 🏗️ **Architecture**
 
@@ -43,18 +54,378 @@ cd todo_app_AWS
 │   React SPA     │    │   Express API   │    │   PostgreSQL    │
 │   (Frontend)    │◄──►│   (Backend)     │◄──►│   (Database)    │
 │   Port: 3000    │    │   Port: 5002    │    │   Port: 5432    │
+│                 │    │                 │    │                 │
+│ • Dashboard     │    │ • Authentication│    │ • Users         │
+│ • Kanban Board  │    │ • Todo CRUD     │    │ • Todos         │
+│ • File Manager  │    │ • File Upload   │    │ • File Attach.  │
+│ • Bulk Actions  │    │ • Bulk Ops      │    │ • State Tracking│
+│ • Export        │    │ • Export        │    │ • Indexes       │
+│ • Drag & Drop   │    │ • Advanced      │    │ • Migrations    │
+│                 │    │   Search        │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Tailwind CSS  │    │   Redis Cache   │    │   File Storage  │
+│                 │    │                 │    │                 │
+│ • Responsive    │    │ • Session Data  │    │ • Uploads       │
+│ • Dark/Light    │    │ • API Cache     │    │ • Thumbnails    │
+│ • Animations    │    │ • Performance   │    │ • File Types    │
+│ • dnd-kit       │    │ • File Cache    │    │ • Validation    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+## 📊 **UML Diagrams**
+
+### **Use Case Diagram**
+```mermaid
+graph TB
+    subgraph "Todo Application v0.6+"
+        User[👤 User]
+        
+        subgraph "Authentication"
+            UC1[Register Account]
+            UC2[Login/Logout]
+            UC3[Change Password]
+            UC4[View Profile]
+        end
+        
+        subgraph "Todo Management"
+            UC5[Create Todo]
+            UC6[View Todos]
+            UC7[Edit Todo]
+            UC8[Delete Todo]
+            UC9[Mark Complete]
+            UC10[Set Priority]
+            UC11[Set Category]
+            UC12[Set Due Date]
+        end
+        
+        subgraph "Advanced Features"
+            UC13[Upload Files]
+            UC14[View File Attachments]
+            UC15[Delete Files]
+            UC16[Bulk Operations]
+            UC17[Drag & Drop Kanban]
+            UC18[Export Todos]
+            UC19[Advanced Search]
+            UC20[Filter Todos]
+        end
+        
+        subgraph "System Features"
+            UC21[Switch Themes]
+            UC22[View Statistics]
+            UC23[Toggle View Mode]
+        end
+    end
+    
+    User --> UC1
+    User --> UC2
+    User --> UC3
+    User --> UC4
+    User --> UC5
+    User --> UC6
+    User --> UC7
+    User --> UC8
+    User --> UC9
+    User --> UC10
+    User --> UC11
+    User --> UC12
+    User --> UC13
+    User --> UC14
+    User --> UC15
+    User --> UC16
+    User --> UC17
+    User --> UC18
+    User --> UC19
+    User --> UC20
+    User --> UC21
+    User --> UC22
+    User --> UC23
+```
+
+### **Class Diagram**
+```mermaid
+classDiagram
+    class User {
+        +id: number
+        +username: string
+        +email: string
+        +password_hash: string
+        +theme_preference: string
+        +created_at: datetime
+        +updated_at: datetime
+        +last_login: datetime
+        +verifyPassword(password: string): boolean
+        +updatePassword(newPassword: string): void
+    }
+    
+    class Todo {
+        +id: number
+        +user_id: number
+        +title: string
+        +description: string
+        +priority: string
+        +category: string
+        +due_date: datetime
+        +completed: boolean
+        +state: string
+        +started_at: datetime
+        +completed_at: datetime
+        +created_at: datetime
+        +updated_at: datetime
+        +create(): Todo
+        +update(data: object): Todo
+        +delete(): void
+        +toggleComplete(): void
+        +updateState(newState: string): void
+    }
+    
+    class FileAttachment {
+        +id: number
+        +todo_id: number
+        +filename: string
+        +original_name: string
+        +file_path: string
+        +file_size: number
+        +mime_type: string
+        +thumbnail_path: string
+        +created_at: datetime
+        +upload(): FileAttachment
+        +delete(): void
+        +generateThumbnail(): void
+    }
+    
+    class AuthContext {
+        +user: User
+        +token: string
+        +login(email: string, password: string): void
+        +logout(): void
+        +register(userData: object): void
+        +changePassword(passwordData: object): void
+        +refreshToken(): void
+    }
+    
+    class TodoContext {
+        +todos: Todo[]
+        +stats: object
+        +loading: boolean
+        +createTodo(todoData: object): void
+        +updateTodo(id: number, data: object): void
+        +deleteTodo(id: number): void
+        +toggleTodo(id: number): void
+        +loadTodos(): void
+        +loadStats(): void
+    }
+    
+    class KanbanBoard {
+        +todos: Todo[]
+        +onMoveTodo(todoId: number, newState: string): void
+        +onSelectTodo(todoId: number): void
+        +selectedTodos: number[]
+        +handleDragEnd(event: DragEndEvent): void
+        +getColumnAllowDrop(columnId: string): boolean
+    }
+    
+    class FileUpload {
+        +todoId: number
+        +onUploadComplete(): void
+        +handleFileSelect(files: FileList): void
+        +uploadFile(file: File): void
+        +validateFile(file: File): boolean
+    }
+    
+    User ||--o{ Todo : owns
+    Todo ||--o{ FileAttachment : has
+    AuthContext --> User : manages
+    TodoContext --> Todo : manages
+    KanbanBoard --> Todo : displays
+    FileUpload --> FileAttachment : creates
+```
+
+### **Entity Relationship Diagram (ERD)**
+```mermaid
+erDiagram
+    USERS {
+        int id PK
+        string username UK
+        string email UK
+        string password_hash
+        string theme_preference
+        timestamp created_at
+        timestamp updated_at
+        timestamp last_login
+    }
+    
+    TODOS {
+        int id PK
+        int user_id FK
+        string title
+        text description
+        string priority
+        string category
+        timestamp due_date
+        boolean completed
+        string state
+        timestamp started_at
+        timestamp completed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    FILE_ATTACHMENTS {
+        int id PK
+        int todo_id FK
+        string filename
+        string original_name
+        string file_path
+        int file_size
+        string mime_type
+        string thumbnail_path
+        timestamp created_at
+    }
+    
+    USERS ||--o{ TODOS : "creates"
+    TODOS ||--o{ FILE_ATTACHMENTS : "has"
+```
+
+### **Sequence Diagram - Todo Creation with File Upload**
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant A as Auth API
+    participant T as Todo API
+    participant F as File API
+    participant D as Database
+    participant S as File Storage
+    
+    U->>F: Create Todo with File
+    F->>A: Validate Token
+    A-->>F: Token Valid
+    F->>T: POST /api/todos
+    T->>D: INSERT todo
+    D-->>T: Todo Created
+    T-->>F: Todo Response
+    
+    F->>F: Upload File
+    F->>F: Validate File Type/Size
+    F->>F: Generate Thumbnail
+    F->>S: Store File
+    S-->>F: File Stored
+    F->>F: POST /api/files
+    F->>D: INSERT file_attachment
+    D-->>F: File Attachment Created
+    F-->>U: Success Response
+```
+
+### **State Diagram - Todo Workflow**
+```mermaid
+stateDiagram-v2
+    [*] --> Todo: Create Todo
+    
+    Todo --> InProgress: Start Working
+    Todo --> Complete: Mark Complete
+    
+    InProgress --> Complete: Finish Task
+    InProgress --> Todo: Reset to Todo
+    
+    Complete --> [*]: Delete Todo
+    
+    note right of Todo
+        Initial state
+        Can be edited
+        Can be deleted
+    end note
+    
+    note right of InProgress
+        Work in progress
+        Started_at timestamp set
+        Cannot go back to Todo
+        (Forward-only workflow)
+    end note
+    
+    note right of Complete
+        Task completed
+        Completed_at timestamp set
+        Cannot be modified
+        (Forward-only workflow)
+    end note
+```
+
+### **Component Diagram**
+```mermaid
+graph TB
+    subgraph "Frontend Components"
+        Dashboard[Dashboard]
+        KanbanBoard[KanbanBoard]
+        TodoList[TodoList]
+        FileUpload[FileUpload]
+        FileAttachment[FileAttachment]
+        BulkOperations[BulkOperations]
+        AdvancedSearch[AdvancedSearch]
+        Profile[Profile]
+    end
+    
+    subgraph "Context Providers"
+        AuthContext[AuthContext]
+        TodoContext[TodoContext]
+        ThemeContext[ThemeContext]
+        ToastContext[ToastContext]
+    end
+    
+    subgraph "API Services"
+        AuthAPI[Auth API]
+        TodoAPI[Todo API]
+        FileAPI[File API]
+        BulkAPI[Bulk API]
+        ExportAPI[Export API]
+    end
+    
+    subgraph "Backend Services"
+        AuthService[Auth Service]
+        TodoService[Todo Service]
+        FileService[File Service]
+        BulkService[Bulk Service]
+        ExportService[Export Service]
+    end
+    
+    Dashboard --> KanbanBoard
+    Dashboard --> TodoList
+    Dashboard --> BulkOperations
+    Dashboard --> AdvancedSearch
+    
+    KanbanBoard --> FileAttachment
+    TodoList --> FileAttachment
+    
+    FileUpload --> FileAPI
+    FileAttachment --> FileAPI
+    
+    AuthContext --> AuthAPI
+    TodoContext --> TodoAPI
+    TodoContext --> BulkAPI
+    TodoContext --> ExportAPI
+    
+    AuthAPI --> AuthService
+    TodoAPI --> TodoService
+    FileAPI --> FileService
+    BulkAPI --> BulkService
+    ExportAPI --> ExportService
 ```
 
 ### **Technology Stack**
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **Frontend** | React 18, Tailwind CSS, Axios | Modern UI with responsive design |
-| **Backend** | Node.js, Express.js, JWT | RESTful API with authentication |
-| **Database** | PostgreSQL | Data persistence with proper schema |
-| **Authentication** | JWT, bcrypt | Secure user authentication |
+| **Frontend** | React 18, Tailwind CSS, Axios, dnd-kit | Modern UI with responsive design and drag-and-drop |
+| **Backend** | Node.js, Express.js, JWT, Multer | RESTful API with authentication and file uploads |
+| **Database** | PostgreSQL | Data persistence with proper schema and file attachments |
+| **Authentication** | JWT, bcrypt | Secure user authentication with password strength validation |
+| **File Management** | Multer, Sharp | File upload, processing, and thumbnail generation |
 | **Validation** | express-validator | Input validation and sanitization |
 | **Logging** | Winston | Comprehensive logging system |
+| **Caching** | Redis | Session data and API response caching |
+| **Testing** | Jest, Playwright | Comprehensive testing suite with 80+ tests |
 
 ## 📋 **Project Structure**
 
@@ -63,18 +434,24 @@ todo_app_AWS/
 ├── backend/                 # Express.js API server
 │   ├── src/
 │   │   ├── config/         # Database and app configuration
-│   │   ├── middleware/     # Authentication and validation
-│   │   ├── models/         # Data access layer
-│   │   ├── routes/         # API endpoint definitions
-│   │   └── utils/          # Helper functions
+│   │   ├── middleware/     # Authentication, validation, and file upload
+│   │   ├── models/         # Data access layer (User, Todo, FileAttachment)
+│   │   ├── routes/         # API endpoints (auth, todos, files, bulk, export)
+│   │   └── utils/          # Helper functions and file processing
+│   ├── uploads/            # File storage directory
+│   │   └── thumbnails/     # Generated image thumbnails
 │   ├── package.json        # Dependencies and scripts
 │   ├── server.js           # Application entry point
 │   └── env.example         # Environment variables template
 ├── frontend/               # React single-page application
 │   ├── src/
 │   │   ├── components/     # Reusable UI components
+│   │   │   ├── common/     # KanbanBoard, FileUpload, BulkOperations, etc.
+│   │   │   ├── layout/     # Layout components
+│   │   │   └── auth/       # Authentication components
 │   │   ├── pages/          # Route-level components
 │   │   ├── context/        # Global state management
+│   │   ├── hooks/          # Custom React hooks
 │   │   ├── services/       # API client layer
 │   │   ├── utils/          # Helper functions
 │   │   └── styles/         # CSS and styling
@@ -85,8 +462,7 @@ todo_app_AWS/
 │   ├── migrations/         # Version-controlled schema changes
 │   └── migrate.js          # Migration runner
 ├── scripts/                # Development and deployment automation
-├── tests/                  # Comprehensive testing suite
-├── babel.config.js         # Babel configuration for JSX transpilation
+├── tests/                  # Comprehensive testing suite (80+ tests)
 │   ├── unit/              # Unit tests for components and utilities
 │   ├── integration/       # API and database integration tests
 │   ├── ui/                # UI/UX and accessibility tests
@@ -95,7 +471,7 @@ todo_app_AWS/
 │   ├── performance/       # Performance and load tests
 │   └── smoke/             # Basic functionality smoke tests
 ├── testreports/           # Generated test reports and coverage
-└── documentation/         # Project documentation and reports
+└── babel.config.js        # Babel configuration for JSX transpilation
 ```
 
 ## 🚀 **Quick Start**
@@ -103,6 +479,7 @@ todo_app_AWS/
 ### **Prerequisites**
 - Node.js (v16 or higher)
 - PostgreSQL (v12 or higher)
+- Redis (v6 or higher) - for caching and session management
 - npm or yarn
 
 ### **Installation**
@@ -424,6 +801,8 @@ All endpoints return consistent error responses:
 - User registration with email validation
 - Secure login with JWT tokens
 - Password hashing with bcrypt
+- **Password strength validation** (8+ chars, uppercase, lowercase, number)
+- **Secure password change** functionality
 - Token refresh mechanism
 - Protected routes and middleware
 - Input validation and sanitization
@@ -433,12 +812,27 @@ All endpoints return consistent error responses:
 - Priority levels (Low, Medium, High)
 - Category organization
 - Due date management
-- Completion status tracking
+- **State tracking** (Todo → In Progress → Complete)
+- **Forward-only workflow** with proper state transitions
 - Search functionality
-- Advanced filtering
-- Bulk operations
+- **Advanced filtering** with date ranges and multi-criteria
+- **Bulk operations** with intelligent selection
+- **Export functionality** (CSV/JSON formats)
 
-### **User Interface**
+### **File Management**
+- **File upload** with multiple file types support
+- **Image thumbnail generation** for visual files
+- **File preview, download, and deletion**
+- **File attachment** to todos
+- **File type validation** and size limits
+- **Secure file storage** with proper organization
+
+### **Advanced UI Features**
+- **Kanban Board** with drag-and-drop functionality
+- **Dual view modes** (List and Kanban)
+- **Bulk selection** with visual indicators
+- **Smart selection** (excludes completed todos from bulk actions)
+- **Interactive drag-and-drop** with visual feedback
 - Modern, responsive design
 - Dark/light theme support
 - Mobile-first approach
@@ -449,16 +843,17 @@ All endpoints return consistent error responses:
 
 ## 🧪 **Testing**
 
-The application includes a comprehensive testing suite with multiple test categories and automated reporting:
+The application includes a comprehensive testing suite with **80+ tests** across multiple categories and automated reporting:
 
 ### **Test Categories**
-- **Unit Tests** - Component and utility function testing
+- **Unit Tests** - Component and utility function testing (80+ tests)
 - **Integration Tests** - API endpoints and database integration
 - **UI/UX Tests** - Accessibility and visual regression testing
-- **End-to-End Tests** - Complete user workflow testing
-- **Security Tests** - Authentication and authorization testing
+- **End-to-End Tests** - Complete user workflow testing including file uploads and Kanban board
+- **Security Tests** - Authentication, authorization, and file upload security testing
 - **Performance Tests** - Load testing and performance monitoring
 - **Smoke Tests** - Basic functionality verification
+- **File Management Tests** - File upload, processing, and validation testing
 
 ### **Running Tests**
 
@@ -871,11 +1266,25 @@ If you encounter JSX parsing errors:
   - **Notification System**: Smart notifications for high-priority todos
   - **Modern Components**: Custom select, date picker, and confirmation dialogs
 
-### **v0.5 Success Criteria Compliance**
+#### **✅ v0.6+ - Advanced Features & File Management**
+- **Status**: COMPLETED - Significantly exceeded original v0.6 goals
+- **Key Achievements**:
+  - **File Upload System**: Complete file management with upload, preview, download, and deletion
+  - **Bulk Operations**: Multi-select functionality with intelligent filtering and batch actions
+  - **Kanban Board**: Full drag-and-drop interface with state management and workflow enforcement
+  - **Export Functionality**: Multiple export formats with smart selection logic
+  - **Advanced Search**: Multi-criteria filtering with date ranges and real-time updates
+  - **Enhanced Security**: Password strength validation and secure password change functionality
+  - **Forward-Only Workflow**: Proper state transitions with visual feedback and validation
+  - **File Attachments**: Complete file attachment system with thumbnails and management
+  - **Smart Selection**: Intelligent bulk action filtering that excludes completed todos
+  - **Production Ready**: All features tested and ready for production deployment
 
-**✅ ALL SUCCESS CRITERIA MET** - v0.5 has successfully met all requirements outlined in the Release Success Criteria document:
+### **v0.6+ Success Criteria Compliance**
 
-#### **Functional Requirements** ✅ **COMPLETED**
+**✅ ALL SUCCESS CRITERIA MET** - The application has successfully exceeded v0.5 goals and achieved v0.6+ status with advanced features:
+
+#### **v0.5 Functional Requirements** ✅ **COMPLETED**
 - ✅ **Error Handling**: User-friendly error messages displayed throughout the application
 - ✅ **Input Validation**: Comprehensive frontend and backend validation working
 - ✅ **Loading States**: Loading indicators for all async operations
@@ -886,6 +1295,17 @@ If you encounter JSX parsing errors:
 - ✅ **Notification System**: Smart notifications for high-priority todos
 - ✅ **Demo Account**: Pre-configured demo user for easy testing
 
+#### **v0.6+ Advanced Features** ✅ **COMPLETED**
+- ✅ **File Upload System**: Complete file management with multiple file types and thumbnails
+- ✅ **Bulk Operations**: Multi-select functionality with intelligent filtering and batch actions
+- ✅ **Kanban Board**: Full drag-and-drop interface with state management and workflow enforcement
+- ✅ **Export Functionality**: Multiple export formats with smart selection logic
+- ✅ **Advanced Search**: Multi-criteria filtering with date ranges and real-time updates
+- ✅ **Enhanced Security**: Password strength validation and secure password change functionality
+- ✅ **Forward-Only Workflow**: Proper state transitions with visual feedback and validation
+- ✅ **File Attachments**: Complete file attachment system with preview, download, and deletion
+- ✅ **Smart Selection**: Intelligent bulk action filtering that excludes completed todos
+
 #### **Technical Requirements** ✅ **COMPLETED**
 - ✅ **Error Boundaries**: React error boundaries implemented for graceful error handling
 - ✅ **Validation Consistency**: Frontend and backend validation perfectly aligned
@@ -895,6 +1315,9 @@ If you encounter JSX parsing errors:
 - ✅ **Comprehensive Testing**: Unit, integration, UI/UX, security, performance, and smoke tests
 - ✅ **Test Reporting**: Automated HTML test reports with detailed metrics
 - ✅ **Modern Components**: Custom select, date picker, and confirmation dialogs
+- ✅ **File Processing**: Image thumbnail generation and file type validation
+- ✅ **Drag & Drop**: Full drag-and-drop functionality with dnd-kit library
+- ✅ **State Management**: Advanced state management with proper workflow enforcement
 
 #### **Acceptance Criteria** ✅ **COMPLETED**
 - ✅ **No Critical Bugs**: Core functionality is stable and bug-free
@@ -904,6 +1327,10 @@ If you encounter JSX parsing errors:
 - ✅ **Stable Performance**: Application is stable, performant, and responsive
 - ✅ **Accessibility**: Basic accessibility requirements met and tested
 - ✅ **Testing Coverage**: Comprehensive test suite with 80+ unit tests passing
+- ✅ **File Management**: Complete file upload, preview, download, and deletion functionality
+- ✅ **Bulk Operations**: Multi-select and batch actions work seamlessly
+- ✅ **Kanban Workflow**: Drag-and-drop state transitions with proper validation
+- ✅ **Export Functionality**: Multiple export formats with smart selection logic
 - ✅ **Documentation**: Complete documentation and setup guides
 
 #### **General Success Criteria** ✅ **COMPLETED**

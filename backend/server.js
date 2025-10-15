@@ -1,11 +1,12 @@
-// Main server entry point for Todo App v0.5
-// Express server with JWT authentication and protected routes
+// Main server entry point for Todo App v0.6
+// Express server with JWT authentication, file uploads, and protected routes
 
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const path = require('path');
 require('dotenv').config();
 
 // Import database, models, and routes
@@ -13,6 +14,10 @@ const { testConnection, closePool } = require('./src/config/database');
 const { logger, requestLogger, errorLogger } = require('./src/utils/logger');
 const authRoutes = require('./src/routes/auth');
 const todoRoutes = require('./src/routes/todos');
+const fileRoutes = require('./src/routes/files');
+const bulkRoutes = require('./src/routes/bulk');
+const exportRoutes = require('./src/routes/export');
+const advancedRoutes = require('./src/routes/advanced');
 
 const app = express();
 const PORT = process.env.PORT || 5002;
@@ -45,8 +50,13 @@ app.use(compression());
 app.use(requestLogger);
 app.use(morgan('combined'));
 
-// Content type validation middleware
+// Content type validation middleware (skip for file uploads)
 app.use((req, res, next) => {
+  // Skip validation for file upload endpoints
+  if (req.path.includes('/files/upload') || req.path.includes('/upload')) {
+    return next();
+  }
+  
   if (req.method !== 'GET' && req.method !== 'DELETE' && req.get('Content-Type') !== 'application/json') {
     return res.status(400).json({
       success: false,
@@ -108,7 +118,7 @@ app.get('/api/health', async (req, res) => {
       status: 'OK', 
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      version: '0.4.0',
+      version: '0.6.0',
       uptime: process.uptime(),
       database: {
         connected: dbConnected,
@@ -121,7 +131,7 @@ app.get('/api/health', async (req, res) => {
       status: 'SERVICE_UNAVAILABLE',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      version: '0.4.0',
+      version: '0.6.0',
       uptime: process.uptime(),
       database: {
         connected: false,
@@ -136,12 +146,16 @@ app.get('/api/health', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Todo App API v0.5',
-    version: '0.5.0',
+    message: 'Todo App API v0.6',
+    version: '0.6.0',
     endpoints: {
       health: '/api/health',
       auth: '/api/auth',
-      todos: '/api/todos'
+      todos: '/api/todos',
+      files: '/api/files',
+      bulk: '/api/bulk',
+      export: '/api/export',
+      advanced: '/api/advanced'
     },
     features: [
       'Express.js server with middleware',
@@ -149,6 +163,11 @@ app.get('/', (req, res) => {
       'JWT authentication system',
       'User registration and login',
       'Protected Todo CRUD operations',
+      'File upload and attachment system',
+      'Image processing and thumbnails',
+      'Bulk operations for todos',
+      'Advanced filtering and search',
+      'Export functionality (CSV/JSON)',
       'Password hashing with bcrypt',
       'Token refresh mechanism',
       'Comprehensive input validation',
@@ -159,9 +178,16 @@ app.get('/', (req, res) => {
   });
 });
 
+// Static file serving for uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/todos', todoRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/bulk', bulkRoutes);
+app.use('/api/export', exportRoutes);
+app.use('/api/advanced', advancedRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

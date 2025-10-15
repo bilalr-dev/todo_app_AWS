@@ -3,20 +3,20 @@
  * This ensures consistent validation rules across the entire application
  */
 
-// Password validation pattern - Enhanced for stronger security
-const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).*$/;
+// Password validation pattern - At least 8 characters with uppercase, lowercase, and number
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).*$/;
 
 // Password validation rules
 const PASSWORD_RULES = {
   MIN_LENGTH: 8,
   PATTERN: PASSWORD_PATTERN,
-  MESSAGE: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+  MESSAGE: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number',
   REQUIREMENTS: {
     MIN_LENGTH: 8,
     UPPERCASE: true,
     LOWERCASE: true,
     NUMBER: true,
-    SPECIAL_CHARS: true, // Require special characters
+    SPECIAL_CHARS: false, // No special characters required
   }
 };
 

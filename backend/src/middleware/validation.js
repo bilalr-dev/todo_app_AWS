@@ -43,7 +43,7 @@ const validateUserRegistration = [
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters long')
     .matches(PASSWORD_PATTERN)
-    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, one number, and one special character'),
+    .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
   
   handleValidationErrors
 ];
@@ -98,6 +98,11 @@ const validateTodoCreation = [
       return true;
     }),
   
+  body('state')
+    .optional()
+    .isIn(['todo', 'inProgress', 'complete'])
+    .withMessage('State must be todo, inProgress, or complete'),
+  
   body('category')
     .optional()
     .isLength({ max: 50 })
@@ -143,6 +148,11 @@ const validateTodoUpdate = [
       }
       return true;
     }),
+  
+  body('state')
+    .optional()
+    .isIn(['todo', 'inProgress', 'complete'])
+    .withMessage('State must be todo, inProgress, or complete'),
   
   body('category')
     .optional()

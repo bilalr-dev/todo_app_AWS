@@ -37,10 +37,11 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.4",
-    "pg": "^8.11.0",
+    "pg": "^8.16.3",
     "redis": "^4.6.7",
-    "sharp": "^0.32.5",
+    "sharp": "^0.32.6",
     "socket.io": "^4.7.2",
+    "uuid": "^13.0.0",
     "winston": "^3.10.0"
   },
   "devDependencies": {

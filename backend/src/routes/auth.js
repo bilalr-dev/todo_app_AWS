@@ -252,6 +252,134 @@ router.put('/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// Change password
+router.put('/change-password', authenticateToken, async (req, res) => {
+  try {
+    // Check if user is a demo user
+    if (req.user.isDemoUser()) {
+      logger.warn('Demo user attempted password change', { userId: req.userId });
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'DEMO_USER_RESTRICTION',
+          message: 'Password changes are disabled for demo users'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate required fields
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_FIELDS',
+          message: 'Current password and new password are required'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Validate new password strength
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'WEAK_PASSWORD',
+          message: 'New password must be at least 8 characters long'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check for uppercase letter
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'WEAK_PASSWORD',
+          message: 'New password must contain at least one uppercase letter'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check for lowercase letter
+    if (!/[a-z]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'WEAK_PASSWORD',
+          message: 'New password must contain at least one lowercase letter'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check for number
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'WEAK_PASSWORD',
+          message: 'New password must contain at least one number'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Verify current password
+    const isValidPassword = await req.user.verifyPassword(currentPassword);
+    if (!isValidPassword) {
+      logger.warn('Invalid current password provided for password change', { userId: req.userId });
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'INVALID_CURRENT_PASSWORD',
+          message: 'Current password is incorrect'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check if new password is different from current password
+    const isSamePassword = await req.user.verifyPassword(newPassword);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'SAME_PASSWORD',
+          message: 'New password must be different from current password'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Update password
+    await req.user.updatePassword(newPassword);
+
+    logger.info('User password changed successfully', { userId: req.userId });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Password change error', { error: error.message, userId: req.userId });
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'PASSWORD_CHANGE_ERROR',
+        message: 'Failed to change password'
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Refresh token
 router.post('/refresh', async (req, res) => {
   try {

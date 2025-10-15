@@ -35,8 +35,13 @@ router.get('/', authenticateToken, async (req, res) => {
       orderDirection: orderDirection.toUpperCase()
     };
 
-    const todos = await Todo.findByUserId(req.userId, options);
-    const total = await Todo.countByUserId(req.userId, options);
+    const { todos, pagination } = await Todo.findWithAttachments(req.userId, {
+      page: Math.floor(offset / limit) + 1,
+      limit,
+      sortBy: orderBy,
+      sortDirection: orderDirection
+    });
+    const total = pagination.total;
 
     logger.info('Todos fetched', { userId: req.userId, count: todos.length });
 
@@ -161,6 +166,10 @@ router.post('/', authenticateToken, validateTodoCreation, async (req, res) => {
     };
 
     const todo = await Todo.create(todoData);
+    
+    // Fetch attachments for the created todo
+    const attachments = await todo.getAttachments();
+    todo.attachments = attachments;
 
     logger.info('Todo created', { todoId: todo.id, userId: req.userId });
 
@@ -225,6 +234,10 @@ router.put('/:id', authenticateToken, validateTodoUpdate, async (req, res) => {
     }
 
     await todo.update(req.body);
+    
+    // Fetch attachments for the updated todo
+    const attachments = await todo.getAttachments();
+    todo.attachments = attachments;
 
     logger.info('Todo updated', { todoId, userId: req.userId });
 
