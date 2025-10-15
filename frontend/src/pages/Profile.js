@@ -7,7 +7,7 @@ import { Input } from '../components/common/Input';
 import { User, Mail, Calendar, Save, Edit3, Sun, Moon } from 'lucide-react';
 
 const Profile = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, changePassword } = useAuth();
   const { theme, setThemeMode } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -15,6 +15,13 @@ const Profile = () => {
     email: user?.email || '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Check if user is a demo user
   const isDemoUser = useMemo(() => {
@@ -58,6 +65,58 @@ const Profile = () => {
       email: user?.email || '',
     });
     setIsEditing(false);
+  };
+
+  const handlePasswordInputChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleChangePassword = async () => {
+    // Validate passwords
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      alert('New passwords do not match');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      alert('New password must be at least 6 characters long');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    
+    try {
+      const result = await changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+      
+      if (result.success) {
+        setPasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
+        setShowChangePassword(false);
+      }
+    } catch (error) {
+      console.error('Password change error:', error);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleCancelPasswordChange = () => {
+    setPasswordData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setShowChangePassword(false);
   };
 
   return (
@@ -219,21 +278,90 @@ const Profile = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 border border-border rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-foreground">Password</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {isDemoUser ? "Password changes are disabled for demo users" : "Last updated: Never"}
-                      </p>
+                  <div className="p-4 border border-border rounded-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h4 className="font-medium text-foreground">Password</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {isDemoUser ? "Password changes are disabled for demo users" : "Last updated: Never"}
+                        </p>
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        disabled={isDemoUser}
+                        onClick={() => setShowChangePassword(!showChangePassword)}
+                        title={isDemoUser ? "Password changes are disabled for demo users" : ""}
+                      >
+                        {showChangePassword ? 'Cancel' : 'Change Password'}
+                      </Button>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      disabled={isDemoUser}
-                      title={isDemoUser ? "Password changes are disabled for demo users" : ""}
-                    >
-                      Change Password
-                    </Button>
+                    
+                    {showChangePassword && !isDemoUser && (
+                      <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div>
+                          <label htmlFor="currentPassword" className="block text-sm font-medium text-foreground mb-2">
+                            Current Password
+                          </label>
+                          <Input
+                            id="currentPassword"
+                            name="currentPassword"
+                            type="password"
+                            value={passwordData.currentPassword}
+                            onChange={handlePasswordInputChange}
+                            placeholder="Enter current password"
+                            className="w-full"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="newPassword" className="block text-sm font-medium text-foreground mb-2">
+                            New Password
+                          </label>
+                          <Input
+                            id="newPassword"
+                            name="newPassword"
+                            type="password"
+                            value={passwordData.newPassword}
+                            onChange={handlePasswordInputChange}
+                            placeholder="Enter new password"
+                            className="w-full"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
+                            Confirm New Password
+                          </label>
+                          <Input
+                            id="confirmPassword"
+                            name="confirmPassword"
+                            type="password"
+                            value={passwordData.confirmPassword}
+                            onChange={handlePasswordInputChange}
+                            placeholder="Confirm new password"
+                            className="w-full"
+                          />
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleChangePassword}
+                            disabled={isChangingPassword || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                            className="flex-1"
+                          >
+                            {isChangingPassword ? 'Changing...' : 'Change Password'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleCancelPasswordChange}
+                            disabled={isChangingPassword}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex items-center justify-between p-4 border border-border rounded-lg">

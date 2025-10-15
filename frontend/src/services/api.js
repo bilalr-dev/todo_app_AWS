@@ -57,7 +57,6 @@ api.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, but don't clear tokens or redirect here
         // Let the AuthContext handle the error appropriately
-        console.log('Token refresh failed, letting AuthContext handle it');
       }
     }
 
@@ -101,6 +100,16 @@ export const authAPI = {
   updateProfile: async (profileData) => {
     try {
       const response = await api.put('/auth/profile', profileData);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Change password
+  changePassword: async (passwordData) => {
+    try {
+      const response = await api.put('/auth/change-password', passwordData);
       return response.data;
     } catch (error) {
       throw error;

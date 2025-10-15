@@ -47,7 +47,7 @@ export const TODO_CONFIG = {
   ],
   
   STATUSES: [
-    { value: 'pending', label: 'Pending', color: 'yellow' },
+    { value: 'pending', label: 'In Progress', color: 'yellow' },
     { value: 'completed', label: 'Completed', color: 'green' },
     { value: 'overdue', label: 'Overdue', color: 'red' },
   ],
@@ -70,7 +70,7 @@ export const TODO_CONFIG = {
     COMPLETION: [
       { value: 'all', label: 'All' },
       { value: 'completed', label: 'Completed' },
-      { value: 'pending', label: 'Pending' },
+      { value: 'pending', label: 'In Progress' },
     ],
     
     DUE_DATE: [
@@ -212,7 +212,7 @@ export const VALIDATION_RULES = {
   
   PASSWORD: {
     MIN_LENGTH: 8,
-    PATTERN: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).*$/,
+    PATTERN: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).*$/,
     MESSAGE: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character',
   },
   

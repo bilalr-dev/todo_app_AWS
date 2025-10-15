@@ -76,7 +76,7 @@ export const StatusBadge = ({ status, className, ...props }) => {
 
   const statusLabels = {
     completed: 'Completed',
-    pending: 'Pending',
+    pending: 'In Progress',
     overdue: 'Overdue',
     cancelled: 'Cancelled',
   };

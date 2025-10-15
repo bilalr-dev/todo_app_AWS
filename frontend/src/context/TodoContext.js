@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { todosAPI } from '../services/api';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -101,10 +101,29 @@ const todoReducer = (state, action) => {
       const updatedTodos = state.todos.map(todo =>
         todo.id === action.payload.id ? action.payload : todo
       );
+      const newFilteredTodos = applyFilters(updatedTodos, state.filters, state.sortBy, state.sortDirection);
+      
+      // Recalculate stats based on updated todos
+      const newStats = {
+        total: updatedTodos.length,
+        completed: updatedTodos.filter(todo => todo.completed || todo.state === 'complete').length,
+        pending: updatedTodos.filter(todo => todo.state === 'inProgress').length,
+        high_priority: updatedTodos.filter(todo => todo.priority === 'high').length,
+        overdue: updatedTodos.filter(todo => {
+          if (!todo.due_date || todo.completed || todo.state === 'complete') return false;
+          const dueDate = new Date(todo.due_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          dueDate.setHours(0, 0, 0, 0);
+          return dueDate < today;
+        }).length,
+      };
+      
       return {
         ...state,
         todos: updatedTodos,
-        filteredTodos: applyFilters(updatedTodos, state.filters, state.sortBy, state.sortDirection),
+        filteredTodos: newFilteredTodos,
+        stats: newStats,
       };
     
     case TODO_ACTIONS.DELETE_TODO:
@@ -122,22 +141,35 @@ const todoReducer = (state, action) => {
     case TODO_ACTIONS.TOGGLE_TODO:
       const toggledTodos = state.todos.map(todo =>
         todo.id === action.payload.id
-          ? { ...todo, completed: action.payload.completed }
+          ? { 
+              ...todo, 
+              completed: action.payload.completed,
+              state: action.payload.state || (action.payload.completed ? 'complete' : 'inProgress')
+            }
           : todo
       );
+      
+      // Recalculate stats based on updated todos
+      const toggleStats = {
+        total: toggledTodos.length,
+        completed: toggledTodos.filter(todo => todo.completed || todo.state === 'complete').length,
+        pending: toggledTodos.filter(todo => todo.state === 'inProgress').length,
+        high_priority: toggledTodos.filter(todo => todo.priority === 'high').length,
+        overdue: toggledTodos.filter(todo => {
+          if (!todo.due_date || todo.completed || todo.state === 'complete') return false;
+          const dueDate = new Date(todo.due_date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          dueDate.setHours(0, 0, 0, 0);
+          return dueDate < today;
+        }).length,
+      };
+      
       return {
         ...state,
         todos: toggledTodos,
         filteredTodos: applyFilters(toggledTodos, state.filters, state.sortBy, state.sortDirection),
-        stats: {
-          ...state.stats,
-          completed: action.payload.completed
-            ? state.stats.completed + 1
-            : Math.max(0, state.stats.completed - 1),
-          pending: action.payload.completed
-            ? Math.max(0, state.stats.pending - 1)
-            : state.stats.pending + 1,
-        },
+        stats: toggleStats,
       };
     
     case TODO_ACTIONS.BULK_UPDATE:
@@ -328,7 +360,7 @@ export const TodoProvider = ({ children }) => {
   }, [isAuthenticated]);
 
   // Load todos function
-  const loadTodos = async (page = 1, limit = 50) => {
+  const loadTodos = useCallback(async (page = 1, limit = 50) => {
     dispatch({ type: TODO_ACTIONS.SET_LOADING, payload: true });
     
     try {
@@ -366,10 +398,10 @@ export const TodoProvider = ({ children }) => {
       });
       showToast(errorMessage, 'error');
     }
-  };
+  }, [state.sortBy, state.sortDirection, dispatch, showToast]);
 
   // Load stats function
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const response = await todosAPI.getStats();
       
@@ -382,20 +414,24 @@ export const TodoProvider = ({ children }) => {
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
-  };
+  }, [dispatch]);
 
   // Create todo function
-  const createTodo = async (todoData) => {
+  const createTodo = async (todoData, showNotification = true, updateLocalState = true) => {
     try {
       const response = await todosAPI.createTodo(todoData);
       
       if (response.success) {
-        dispatch({
-          type: TODO_ACTIONS.ADD_TODO,
-          payload: response.data.todo,
-        });
+        if (updateLocalState) {
+          dispatch({
+            type: TODO_ACTIONS.ADD_TODO,
+            payload: response.data.todo,
+          });
+        }
         
-        showToast('Todo created successfully!', 'success');
+        if (showNotification) {
+          showToast('Todo created successfully!', 'success');
+        }
         return { success: true };
       } else {
         showToast(response.error?.message || 'Failed to create todo', 'error');
@@ -409,17 +445,20 @@ export const TodoProvider = ({ children }) => {
   };
 
   // Update todo function
-  const updateTodo = async (id, todoData) => {
+  const updateTodo = async (id, todoData, showNotification = true, updateLocalState = true) => {
     try {
       const response = await todosAPI.updateTodo(id, todoData);
-      
       if (response.success) {
-        dispatch({
-          type: TODO_ACTIONS.UPDATE_TODO,
-          payload: response.data.todo,
-        });
+        if (updateLocalState) {
+          dispatch({
+            type: TODO_ACTIONS.UPDATE_TODO,
+            payload: response.data.todo,
+          });
+        }
         
-        showToast('Todo updated successfully!', 'success');
+        if (showNotification) {
+          showToast('Todo updated successfully!', 'success');
+        }
         return { success: true };
       } else {
         showToast(response.error?.message || 'Failed to update todo', 'error');
@@ -456,24 +495,23 @@ export const TodoProvider = ({ children }) => {
     }
   };
 
-  // Toggle todo completion function
+  // Toggle todo completion function (forward-only: can only mark as complete)
   const toggleTodo = async (id) => {
     try {
       const response = await todosAPI.toggleTodo(id);
       
       if (response.success) {
+        
         dispatch({
           type: TODO_ACTIONS.TOGGLE_TODO,
           payload: {
             id,
             completed: response.data.todo.completed,
+            state: response.data.todo.state,
           },
         });
         
-        showToast(
-          response.data.todo.completed ? 'Todo completed!' : 'Todo marked as pending',
-          'success'
-        );
+        showToast('Todo completed!', 'success');
         return { success: true };
       } else {
         showToast(response.error?.message || 'Failed to toggle todo', 'error');
@@ -486,7 +524,7 @@ export const TodoProvider = ({ children }) => {
     }
   };
 
-  // Bulk operations function
+  // Bulk operations function (with API call)
   const bulkOperation = async (operation, todoIds, data = {}) => {
     try {
       const response = await todosAPI.bulkOperation(operation, todoIds, data);
@@ -498,11 +536,26 @@ export const TodoProvider = ({ children }) => {
             payload: todoIds,
           });
         } else {
+          let updateData = {};
+          
+          if (operation === 'complete') {
+            updateData = { completed: true, state: 'complete' };
+          } else if (operation === 'in-progress') {
+            // Set state to inProgress for todos moved to in-progress
+            updateData = { completed: false, state: 'inProgress' };
+          } else if (operation === 'priority') {
+            updateData = { priority: data.priority };
+          } else if (operation === 'category') {
+            updateData = { category: data.category };
+          } else if (operation === 'update') {
+            updateData = data;
+          }
+          
           dispatch({
             type: TODO_ACTIONS.BULK_UPDATE,
             payload: {
               ids: todoIds,
-              data: operation === 'update' ? data : { completed: operation === 'complete' },
+              data: updateData,
             },
           });
         }
@@ -517,6 +570,39 @@ export const TodoProvider = ({ children }) => {
       const errorMessage = error.response?.data?.error?.message || `Failed to ${operation} todos`;
       showToast(errorMessage, 'error');
       return { success: false, error: errorMessage };
+    }
+  };
+
+  // Bulk operations state update only (no API call)
+  const updateBulkState = (operation, todoIds, data = {}) => {
+    if (operation === 'delete') {
+      dispatch({
+        type: TODO_ACTIONS.BULK_DELETE,
+        payload: todoIds,
+      });
+    } else {
+      let updateData = {};
+      
+      if (operation === 'complete') {
+        updateData = { completed: true, state: 'complete' };
+      } else if (operation === 'in-progress') {
+        // Set state to inProgress for todos moved to in-progress
+        updateData = { completed: false, state: 'inProgress' };
+      } else if (operation === 'priority') {
+        updateData = { priority: data.priority };
+      } else if (operation === 'category') {
+        updateData = { category: data.category };
+      } else if (operation === 'update') {
+        updateData = data;
+      }
+      
+      dispatch({
+        type: TODO_ACTIONS.BULK_UPDATE,
+        payload: {
+          ids: todoIds,
+          data: updateData,
+        },
+      });
     }
   };
 
@@ -571,6 +657,14 @@ export const TodoProvider = ({ children }) => {
     dispatch({ type: TODO_ACTIONS.CLEAR_ERROR });
   };
 
+  // Set todos directly (for advanced search results)
+  const setTodos = useCallback((todos) => {
+    dispatch({ 
+      type: TODO_ACTIONS.SET_TODOS, 
+      payload: { todos: Array.isArray(todos) ? todos : [], pagination: state.pagination } 
+    });
+  }, [state.pagination]);
+
   // Context value
   const value = {
     ...state,
@@ -581,11 +675,13 @@ export const TodoProvider = ({ children }) => {
     deleteTodo,
     toggleTodo,
     bulkOperation,
+    updateBulkState,
     searchTodos,
     setFilters,
     setSort,
     clearFilters,
     clearError,
+    setTodos,
   };
 
   return (

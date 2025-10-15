@@ -17,7 +17,8 @@ const DatePicker = ({
   disabled = false,
   minDate = null,
   maxDate = null,
-  label = null
+  label = null,
+  allowEmpty = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -96,14 +97,22 @@ const DatePicker = ({
   };
 
   const handleResetToToday = () => {
-    const today = new Date();
-    setSelectedDate(today);
-    // Use local date instead of UTC to avoid timezone issues
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    onChange(`${year}-${month}-${day}`);
-    setIsOpen(false);
+    if (allowEmpty) {
+      // Clear the date completely
+      setSelectedDate(null);
+      onChange('');
+      setIsOpen(false);
+    } else {
+      // Reset to today's date
+      const today = new Date();
+      setSelectedDate(today);
+      // Use local date instead of UTC to avoid timezone issues
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      onChange(`${year}-${month}-${day}`);
+      setIsOpen(false);
+    }
   };
 
   const navigateMonth = (direction) => {
@@ -114,13 +123,6 @@ const DatePicker = ({
     });
   };
 
-  const navigateYear = (direction) => {
-    setCurrentMonth(prev => {
-      const newMonth = new Date(prev);
-      newMonth.setFullYear(prev.getFullYear() + direction);
-      return newMonth;
-    });
-  };
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -426,7 +428,7 @@ const DatePicker = ({
                 handleResetToToday();
               }}
               className="h-4 w-4 p-0 hover:bg-accent"
-              title="Reset to today"
+              title={allowEmpty ? "Clear date" : "Reset to today"}
             >
               <X className="h-3 w-3" />
             </Button>

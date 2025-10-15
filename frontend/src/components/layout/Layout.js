@@ -55,6 +55,7 @@ const Layout = () => {
   
   // Create a hash of todos to force memoization updates
   const todosHash = useMemo(() => {
+    if (!Array.isArray(todos)) return '';
     return todos.map(t => `${t.id}-${t.priority}-${t.due_date}-${t.completed}`).join('|');
   }, [todos]);
   const location = useLocation();
@@ -67,6 +68,7 @@ const Layout = () => {
 
   // Filter urgent todos (high priority, due within 5 days) - memoized
   const urgentTodos = useMemo(() => {
+    if (!Array.isArray(todos)) return [];
     const filtered = todos.filter(todo => {
       if (!todo.due_date || todo.completed || todo.priority !== 'high') return false;
       
@@ -114,7 +116,6 @@ const Layout = () => {
 
   // Manual cleanup function for debugging
   const clearNotificationState = () => {
-    console.log('Manually clearing notification state');
     setSeenTodos(new Set());
     setClearedTodos(new Set());
     localStorage.removeItem('seenTodos');
@@ -207,6 +208,7 @@ const Layout = () => {
 
   // Clean up seen and cleared todos when todos are deleted (not on initial load)
   useEffect(() => {
+    if (!Array.isArray(todos)) return;
     const currentTodoIds = new Set(todos.map(todo => todo.id));
     const prevTodoIds = prevTodosRef.current;
     
@@ -251,7 +253,7 @@ const Layout = () => {
   // Handle todo updates - remove from cleared/seen only if they become non-urgent
   useEffect(() => {
     // Only clean up if we have todos loaded (not on initial load when urgentTodos is empty)
-    if (urgentTodos.length === 0 && todos.length === 0) {
+    if (urgentTodos.length === 0 && (!Array.isArray(todos) || todos.length === 0)) {
       return; // Don't clean up on initial load
     }
     

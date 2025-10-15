@@ -4,6 +4,9 @@
   "description": "React frontend for Todo App v0.5 - Optimized todo application with modern UI and performance",
   "private": true,
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-query": "^4.32.6",
     "axios": "^1.4.0",
     "clsx": "^2.0.0",

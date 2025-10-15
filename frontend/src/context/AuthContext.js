@@ -334,6 +334,31 @@ export const AuthProvider = ({ children }) => {
     }
   }, [showToast]);
 
+  // Change password function
+  const changePassword = useCallback(async (passwordData, showNotification = true) => {
+    try {
+      const response = await authAPI.changePassword(passwordData);
+      
+      if (response.success) {
+        if (showNotification) {
+          showToast('Password changed successfully!', 'success');
+        }
+        return { success: true };
+      } else {
+        if (showNotification) {
+          showToast(response.error?.message || 'Password change failed', 'error');
+        }
+        return { success: false, error: response.error?.message };
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error?.message || 'Password change failed';
+      if (showNotification) {
+        showToast(errorMessage, 'error');
+      }
+      return { success: false, error: errorMessage };
+    }
+  }, [showToast]);
+
   // Clear error function
   const clearError = useCallback(() => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
@@ -347,8 +372,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     refreshToken,
     updateProfile,
+    changePassword,
     clearError,
-  }), [state, login, register, logout, refreshToken, updateProfile, clearError]);
+  }), [state, login, register, logout, refreshToken, updateProfile, changePassword, clearError]);
 
   return (
     <AuthContext.Provider value={value}>
