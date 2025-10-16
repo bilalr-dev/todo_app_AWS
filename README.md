@@ -84,164 +84,147 @@ cd todo_app_AWS
 
 ### **Use Case Diagram**
 ```mermaid
-graph TB
-    subgraph "Todo Application v0.6+"
-        User[👤 User]
-        
-        subgraph "Authentication"
-            UC1[Register Account]
-            UC2[Login/Logout]
-            UC3[Change Password]
-            UC4[View Profile]
-        end
-        
-        subgraph "Todo Management"
-            UC5[Create Todo]
-            UC6[View Todos]
-            UC7[Edit Todo]
-            UC8[Delete Todo]
-            UC9[Mark Complete]
-            UC10[Set Priority]
-            UC11[Set Category]
-            UC12[Set Due Date]
-        end
-        
-        subgraph "Advanced Features"
-            UC13[Upload Files]
-            UC14[View File Attachments]
-            UC15[Delete Files]
-            UC16[Bulk Operations]
-            UC17[Drag & Drop Kanban]
-            UC18[Export Todos]
-            UC19[Advanced Search]
-            UC20[Filter Todos]
-        end
-        
-        subgraph "System Features"
-            UC21[Switch Themes]
-            UC22[View Statistics]
-            UC23[Toggle View Mode]
-        end
+graph LR
+    User[👤 User]
+    
+    subgraph Auth["Authentication"]
+        UC1[Register Account]
+        UC2[Login/Logout]
+        UC3[Change Password]
+        UC4[View Profile]
     end
     
-    User --> UC1
-    User --> UC2
-    User --> UC3
-    User --> UC4
-    User --> UC5
-    User --> UC6
-    User --> UC7
-    User --> UC8
-    User --> UC9
-    User --> UC10
-    User --> UC11
-    User --> UC12
-    User --> UC13
-    User --> UC14
-    User --> UC15
-    User --> UC16
-    User --> UC17
-    User --> UC18
-    User --> UC19
-    User --> UC20
-    User --> UC21
-    User --> UC22
-    User --> UC23
+    subgraph Todo["Todo Management"]
+        UC5[Create Todo]
+        UC6[View Todos]
+        UC7[Edit Todo]
+        UC8[Delete Todo]
+        UC9[Mark Complete]
+        UC10[Set Priority]
+        UC11[Set Category]
+        UC12[Set Due Date]
+    end
+    
+    subgraph Advanced["Advanced Features"]
+        UC13[Upload Files]
+        UC14[View File Attachments]
+        UC15[Delete Files]
+        UC16[Bulk Operations]
+        UC17[Drag & Drop Kanban]
+        UC18[Export Todos]
+        UC19[Advanced Search]
+        UC20[Filter Todos]
+    end
+    
+    subgraph System["System Features"]
+        UC21[Switch Themes]
+        UC22[View Statistics]
+        UC23[Toggle View Mode]
+    end
+    
+    User --> Auth
+    User --> Todo
+    User --> Advanced
+    User --> System
 ```
 
 ### **Class Diagram**
 ```mermaid
 classDiagram
+    direction TB
+    
     class User {
-        +id: number
-        +username: string
-        +email: string
-        +password_hash: string
-        +theme_preference: string
-        +created_at: datetime
-        +updated_at: datetime
-        +last_login: datetime
-        +verifyPassword(password: string): boolean
-        +updatePassword(newPassword: string): void
+        +id number
+        +username string
+        +email string
+        +password_hash string
+        +theme_preference string
+        +created_at datetime
+        +updated_at datetime
+        +last_login datetime
+        +verifyPassword(password) boolean
+        +updatePassword(newPassword) void
     }
     
     class Todo {
-        +id: number
-        +user_id: number
-        +title: string
-        +description: string
-        +priority: string
-        +category: string
-        +due_date: datetime
-        +completed: boolean
-        +state: string
-        +started_at: datetime
-        +completed_at: datetime
-        +created_at: datetime
-        +updated_at: datetime
-        +create(): Todo
-        +update(data: object): Todo
-        +delete(): void
-        +toggleComplete(): void
-        +updateState(newState: string): void
+        +id number
+        +user_id number
+        +title string
+        +description string
+        +priority string
+        +category string
+        +due_date datetime
+        +completed boolean
+        +state string
+        +started_at datetime
+        +completed_at datetime
+        +created_at datetime
+        +updated_at datetime
+        +create() Todo
+        +update(data) Todo
+        +delete() void
+        +toggleComplete() void
+        +updateState(newState) void
     }
     
     class FileAttachment {
-        +id: number
-        +todo_id: number
-        +filename: string
-        +original_name: string
-        +file_path: string
-        +file_size: number
-        +mime_type: string
-        +thumbnail_path: string
-        +created_at: datetime
-        +upload(): FileAttachment
-        +delete(): void
-        +generateThumbnail(): void
+        +id number
+        +todo_id number
+        +filename string
+        +original_name string
+        +file_path string
+        +file_size number
+        +mime_type string
+        +thumbnail_path string
+        +created_at datetime
+        +upload() FileAttachment
+        +delete() void
+        +generateThumbnail() void
     }
     
     class AuthContext {
-        +user: User
-        +token: string
-        +login(email: string, password: string): void
-        +logout(): void
-        +register(userData: object): void
-        +changePassword(passwordData: object): void
-        +refreshToken(): void
+        +user User
+        +token string
+        +login(email, password) void
+        +logout() void
+        +register(userData) void
+        +changePassword(passwordData) void
+        +refreshToken() void
     }
     
     class TodoContext {
-        +todos: Todo[]
-        +stats: object
-        +loading: boolean
-        +createTodo(todoData: object): void
-        +updateTodo(id: number, data: object): void
-        +deleteTodo(id: number): void
-        +toggleTodo(id: number): void
-        +loadTodos(): void
-        +loadStats(): void
+        +todos Todo[]
+        +stats object
+        +loading boolean
+        +createTodo(todoData) void
+        +updateTodo(id, data) void
+        +deleteTodo(id) void
+        +toggleTodo(id) void
+        +loadTodos() void
+        +loadStats() void
     }
     
     class KanbanBoard {
-        +todos: Todo[]
-        +onMoveTodo(todoId: number, newState: string): void
-        +onSelectTodo(todoId: number): void
-        +selectedTodos: number[]
-        +handleDragEnd(event: DragEndEvent): void
-        +getColumnAllowDrop(columnId: string): boolean
+        +todos Todo[]
+        +selectedTodos number[]
+        +onMoveTodo(todoId, newState) void
+        +onSelectTodo(todoId) void
+        +handleDragEnd(event) void
+        +getColumnAllowDrop(columnId) boolean
     }
     
     class FileUpload {
-        +todoId: number
-        +onUploadComplete(): void
-        +handleFileSelect(files: FileList): void
-        +uploadFile(file: File): void
-        +validateFile(file: File): boolean
+        +todoId number
+        +onUploadComplete() void
+        +handleFileSelect(files) void
+        +uploadFile(file) void
+        +validateFile(file) boolean
     }
     
-    User ||--o{ Todo : owns
-    Todo ||--o{ FileAttachment : has
+    %% Relationships
+    User "1" --o "*" Todo : owns
+    Todo "1" --o "*" FileAttachment : has
+    
     AuthContext --> User : manages
     TodoContext --> Todo : manages
     KanbanBoard --> Todo : displays
@@ -298,30 +281,43 @@ erDiagram
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant F as Frontend
-    participant A as Auth API
-    participant T as Todo API
-    participant F as File API
-    participant D as Database
-    participant S as File Storage
+    participant FE as Frontend
+    participant Auth as Auth API
+    participant Todo as Todo API
+    participant File as File API
+    participant DB as Database
+    participant FS as File Storage
     
-    U->>F: Create Todo with File
-    F->>A: Validate Token
-    A-->>F: Token Valid
-    F->>T: POST /api/todos
-    T->>D: INSERT todo
-    D-->>T: Todo Created
-    T-->>F: Todo Response
+    U->>FE: Create Todo with File
     
-    F->>F: Upload File
-    F->>F: Validate File Type/Size
-    F->>F: Generate Thumbnail
-    F->>S: Store File
-    S-->>F: File Stored
-    F->>F: POST /api/files
-    F->>D: INSERT file_attachment
-    D-->>F: File Attachment Created
-    F-->>U: Success Response
+    rect rgb(240, 248, 255)
+        Note over FE,Auth: Authentication
+        FE->>Auth: Validate Token
+        Auth-->>FE: Token Valid
+    end
+    
+    rect rgb(255, 250, 240)
+        Note over FE,DB: Todo Creation
+        FE->>Todo: POST /api/todos
+        Todo->>DB: INSERT todo
+        DB-->>Todo: Todo Created
+        Todo-->>FE: Todo Response (ID: 123)
+    end
+    
+    rect rgb(240, 255, 240)
+        Note over FE,FS: File Upload Process
+        FE->>FE: Validate File Type/Size
+        FE->>FE: Generate Thumbnail
+        FE->>FS: Store File
+        FS-->>FE: File Stored (Path)
+        
+        FE->>File: POST /api/files
+        File->>DB: INSERT file_attachment
+        DB-->>File: File Attachment Created
+        File-->>FE: File Response
+    end
+    
+    FE-->>U: Success: Todo Created with File
 ```
 
 ### **State Diagram - Todo Workflow**
@@ -330,38 +326,62 @@ stateDiagram-v2
     [*] --> Todo: Create Todo
     
     Todo --> InProgress: Start Working
-    Todo --> Complete: Mark Complete
+    Todo --> Complete: Mark Complete (Skip)
+    Todo --> [*]: Delete
     
     InProgress --> Complete: Finish Task
-    InProgress --> Todo: Reset to Todo
+    InProgress --> [*]: Delete
     
-    Complete --> [*]: Delete Todo
+    Complete --> [*]: Delete/Archive
     
-    note right of Todo
-        Initial state
-        Can be edited
-        Can be deleted
+    state Todo {
+        [*] --> Editable
+        Editable --> Editable: Update title/description/priority
+    }
+    
+    state InProgress {
+        [*] --> Active
+        note right of Active
+            started_at timestamp set
+            Task in progress
+        end note
+    }
+    
+    state Complete {
+        [*] --> Done
+        note right of Done
+            completed_at timestamp set
+            Read-only state
+        end note
+    }
+    
+    note left of Todo
+        Initial State
+        - Fully editable
+        - Can set priority/category
+        - Can add due date
     end note
     
     note right of InProgress
-        Work in progress
-        Started_at timestamp set
-        Cannot go back to Todo
-        (Forward-only workflow)
+        Active Work
+        - Started timestamp recorded
+        - Can still be edited
+        - Progress tracked
     end note
     
     note right of Complete
-        Task completed
-        Completed_at timestamp set
-        Cannot be modified
-        (Forward-only workflow)
+        Finished
+        - Completion timestamp recorded
+        - No further modifications
+        - Can only be deleted
     end note
 ```
 
 ### **Component Diagram**
 ```mermaid
-graph TB
-    subgraph "Frontend Components"
+graph LR
+    subgraph Frontend["Frontend Layer"]
+        direction TB
         Dashboard[Dashboard]
         KanbanBoard[KanbanBoard]
         TodoList[TodoList]
@@ -372,14 +392,16 @@ graph TB
         Profile[Profile]
     end
     
-    subgraph "Context Providers"
+    subgraph Context["Context Layer"]
+        direction TB
         AuthContext[AuthContext]
         TodoContext[TodoContext]
         ThemeContext[ThemeContext]
         ToastContext[ToastContext]
     end
     
-    subgraph "API Services"
+    subgraph API["API Layer"]
+        direction TB
         AuthAPI[Auth API]
         TodoAPI[Todo API]
         FileAPI[File API]
@@ -387,7 +409,8 @@ graph TB
         ExportAPI[Export API]
     end
     
-    subgraph "Backend Services"
+    subgraph Backend["Backend Layer"]
+        direction TB
         AuthService[Auth Service]
         TodoService[Todo Service]
         FileService[File Service]
@@ -403,6 +426,8 @@ graph TB
     KanbanBoard --> FileAttachment
     TodoList --> FileAttachment
     
+    Frontend --> Context
+    
     FileUpload --> FileAPI
     FileAttachment --> FileAPI
     
@@ -416,6 +441,11 @@ graph TB
     FileAPI --> FileService
     BulkAPI --> BulkService
     ExportAPI --> ExportService
+    
+    style Frontend fill:#e1f5ff
+    style Context fill:#fff4e1
+    style API fill:#e8f5e9
+    style Backend fill:#f3e5f5
 ```
 
 ### **Technology Stack**
@@ -623,7 +653,7 @@ Authorization: Bearer <jwt_token>
     "id": 1,
     "username": "string",
     "email": "string",
-    "created_at": "2025-10-01T00:00:00.000Z"
+    "created_at": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
@@ -670,7 +700,7 @@ Create a new todo.
   "description": "string",
   "priority": "low|medium|high",
   "category": "string",
-  "due_date": "2025-10-01T00:00:00.000Z"
+  "due_date": "2024-01-01T00:00:00.000Z"
 }
 
 // Response
@@ -685,7 +715,7 @@ Create a new todo.
     "category": "string",
     "status": "pending",
     "due_date": "2025-10-01T00:00:00.000Z",
-    "created_at": "2025-10-01T00:00:00.000Z"
+    "created_at": "2024-01-01T00:00:00.000Z"
   }
 }
 ```
@@ -720,7 +750,7 @@ Update an existing todo.
   "priority": "low|medium|high",
   "category": "string",
   "status": "pending|completed",
-  "due_date": "2025-10-01T00:00:00.000Z"
+  "due_date": "2024-01-01T00:00:00.000Z"
 }
 
 // Response
