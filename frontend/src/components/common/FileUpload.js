@@ -12,13 +12,20 @@ const FileUpload = forwardRef(({
   maxFiles = 5, 
   className = '',
   existingAttachments = [],
-  deletingFiles = new Set()
+  deletingFiles = new Set(),
+  suppressCancellationError = false
 }, ref) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   const cancelledRef = useRef(false);
+  const suppressCancellationErrorRef = useRef(suppressCancellationError);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+
+  // Update ref when suppressCancellationError changes
+  useEffect(() => {
+    suppressCancellationErrorRef.current = suppressCancellationError;
+  }, [suppressCancellationError]);
 
   // Notify parent component when selectedFiles changes
   useEffect(() => {
@@ -31,6 +38,8 @@ const FileUpload = forwardRef(({
   const cancelUploads = useCallback(() => {
     if (cancelledRef.current && typeof cancelledRef.current === 'object') {
       cancelledRef.current.cancelled = true;
+      // Don't clear the cancellation check interval - let it detect the cancellation and handle cleanup
+      // Don't clear the timeout - let the cancellation check handle it
     }
     setSelectedFiles(prev => prev.map(fileData => ({
       ...fileData,
@@ -41,7 +50,9 @@ const FileUpload = forwardRef(({
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
-    uploadFiles: uploadSelectedFiles,
+    uploadFiles: (overrideTodoId = null) => {
+      return uploadSelectedFiles(overrideTodoId);
+    },
     clearFiles: clearSelectedFiles,
     cancelUploads: cancelUploads,
     getSelectedFiles: () => selectedFiles
@@ -114,8 +125,11 @@ const FileUpload = forwardRef(({
     setSelectedFiles([]);
   }, []);
 
-  const uploadSelectedFiles = useCallback(async () => {
-    if (selectedFiles.length === 0 || !todoId) return [];
+  const uploadSelectedFiles = useCallback(async (overrideTodoId = null) => {
+    const currentTodoId = overrideTodoId || todoId;
+    if (selectedFiles.length === 0 || !currentTodoId) {
+      return [];
+    }
 
     cancelledRef.current = false; // Reset cancellation state
     
@@ -146,6 +160,10 @@ const FileUpload = forwardRef(({
           const progressInterval = setInterval(() => {
             if (uploadController.cancelled) {
               clearInterval(progressInterval);
+              // Clear the timeout immediately when cancelled
+              if (uploadController.timeoutId) {
+                clearTimeout(uploadController.timeoutId);
+              }
               return;
             }
             setSelectedFiles(prev => prev.map(f => {
@@ -158,14 +176,33 @@ const FileUpload = forwardRef(({
             }));
           }, 100); // Update every 100ms for smooth animation
 
-          // Wait for the full 15-second animation to complete
-          await new Promise(resolve => setTimeout(resolve, estimatedTime));
-
-          // Check if upload was cancelled during animation
-          if (uploadController.cancelled) {
-            clearInterval(progressInterval);
-            throw new Error('Upload cancelled');
-          }
+          // Wait for the full 15-second animation to complete, but make it cancellable
+          await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              if (uploadController.cancelled) {
+                clearInterval(progressInterval);
+                reject(new Error(suppressCancellationErrorRef.current ? 'Upload cancelled silently' : 'Upload cancelled'));
+              } else {
+                resolve();
+              }
+            }, estimatedTime);
+            
+            // Store timeout ID so it can be cleared if cancelled
+            uploadController.timeoutId = timeoutId;
+            
+            // Check for cancellation every 100ms and reject immediately if cancelled
+            const cancellationCheck = setInterval(() => {
+              if (uploadController.cancelled) {
+                clearInterval(cancellationCheck);
+                clearInterval(progressInterval);
+                clearTimeout(timeoutId);
+                reject(new Error(suppressCancellationErrorRef.current ? 'Upload cancelled silently' : 'Upload cancelled'));
+              }
+            }, 100);
+            
+            // Store cancellation check interval for cleanup
+            uploadController.cancellationCheck = cancellationCheck;
+          });
 
           // Now start the actual upload (only after animation completes)
           const formData = new FormData();
@@ -176,7 +213,7 @@ const FileUpload = forwardRef(({
           
           // Clear the progress interval and start actual upload
           clearInterval(progressInterval);
-          const response = await fetch(`${apiUrl}/files/upload/${todoId}`, {
+          const response = await fetch(`${apiUrl}/files/upload/${currentTodoId}`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`
@@ -213,7 +250,7 @@ const FileUpload = forwardRef(({
           reject(error);
         });
     });
-  }, [selectedFiles, todoId]);
+  }, [selectedFiles, todoId, suppressCancellationError]);
 
   const handleFileChange = (e) => {
     const files = e.target.files;

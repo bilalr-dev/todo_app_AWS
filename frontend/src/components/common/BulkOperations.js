@@ -10,6 +10,7 @@ import {
   Tag,
   X
 } from 'lucide-react';
+import { TODO_CONFIG } from '../../utils/constants';
 
 const BulkOperations = ({ 
   selectedTodos, 
@@ -23,7 +24,7 @@ const BulkOperations = ({
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   // Filter out completed todos for selection
-  const selectableTodos = todos.filter(todo => !todo.completed && todo.state !== 'complete');
+  const selectableTodos = todos.filter(todo => todo.status !== 'completed');
   const isAllSelected = selectableTodos.length > 0 && selectedTodos.length === selectableTodos.length;
   const isIndeterminate = selectedTodos.length > 0 && selectedTodos.length < selectableTodos.length;
 
@@ -51,7 +52,7 @@ const BulkOperations = ({
       await onBulkAction(action, { todoIds: selectedTodos, ...data });
       onSelectionChange([]); // Clear selection after action
     } catch (error) {
-      console.error('Bulk action error:', error);
+      // Error handling is done by the bulk action methods
     } finally {
       setActionLoading(false);
     }
@@ -219,13 +220,13 @@ const BulkOperations = ({
               Set Category for {selectedTodos.length} todo{selectedTodos.length !== 1 ? 's' : ''}
             </h3>
             <div className="space-y-2">
-              {['work', 'personal', 'shopping', 'health', 'finance', 'education', 'travel', 'other'].map(category => (
+              {TODO_CONFIG.CATEGORIES.map(category => (
                 <button
-                  key={category}
-                  onClick={() => handleCategoryChange(category)}
-                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors capitalize"
+                  key={category.value}
+                  onClick={() => handleCategoryChange(category.value)}
+                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  {category}
+                  {category.label}
                 </button>
               ))}
             </div>

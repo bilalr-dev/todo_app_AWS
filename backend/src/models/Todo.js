@@ -1,4 +1,4 @@
-// Todo model for database operations v0.6
+// Todo model for database operations v0.6 - Optimized Architecture
 const { query } = require('../config/database');
 const { logger } = require('../utils/logger');
 
@@ -12,8 +12,7 @@ class Todo {
     this.due_date = data.due_date;
     this.category = data.category;
     this.position = data.position;
-    this.completed = data.completed;
-    this.state = data.state || 'todo';
+    this.status = data.status || 'pending'; // Consolidated: pending | in_progress | completed
     this.file_count = data.file_count || 0;
     this.attachments = data.attachments || [];
     this.created_at = data.created_at;
@@ -22,30 +21,15 @@ class Todo {
     this.completed_at = data.completed_at;
   }
 
-  // Create a new todo
-  static async create(todoData) {
-    try {
-      const { user_id, title, description, priority, due_date, category, state } = todoData;
-      
-      const result = await query(
-        `INSERT INTO todos (user_id, title, description, priority, due_date, category, state) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) 
-         RETURNING *`,
-        [user_id, title, description, priority || 'medium', due_date, category, state || 'todo']
-      );
-      
-      logger.info('Todo created successfully', { todoId: result.rows[0].id, userId: user_id });
-      return new Todo(result.rows[0]);
-    } catch (error) {
-      logger.error('Error creating todo', { error: error.message, userId: todoData.user_id });
-      throw error;
-    }
+  // Static query method for database operations
+  static async query(sql, params = []) {
+    return await query(sql, params);
   }
 
   // Find todo by ID
   static async findById(id) {
     try {
-      const result = await query(
+      const result = await Todo.query(
         'SELECT * FROM todos WHERE id = $1',
         [id]
       );
@@ -65,7 +49,7 @@ class Todo {
   static async findByUserId(userId, options = {}) {
     try {
       const { 
-        completed, 
+        status, 
         priority, 
         category, 
         limit = 50, 
@@ -78,10 +62,10 @@ class Todo {
       const values = [userId];
       let paramCount = 1;
 
-      if (completed !== undefined) {
+      if (status) {
         paramCount++;
-        whereClause += ` AND completed = $${paramCount}`;
-        values.push(completed);
+        whereClause += ` AND status = $${paramCount}`;
+        values.push(status);
       }
 
       if (priority) {
@@ -104,7 +88,7 @@ class Todo {
       const offsetClause = `OFFSET $${paramCount}`;
       values.push(offset);
 
-      const result = await query(
+      const result = await Todo.query(
         `SELECT * FROM todos ${whereClause} ORDER BY ${orderBy} ${orderDirection} ${limitClause} ${offsetClause}`,
         values
       );
@@ -116,194 +100,12 @@ class Todo {
     }
   }
 
-  // Update todo
-  async update(updateData) {
-    try {
-      const allowedFields = ['title', 'description', 'priority', 'due_date', 'category', 'completed', 'position', 'state'];
-      const updates = [];
-      const values = [];
-      let paramCount = 1;
-
-
-      // Enforce forward-only movement rule for state changes and handle state transition timestamps
-      if (updateData.state !== undefined) {
-        const currentState = this.state || (this.completed ? 'complete' : 'todo');
-        const newState = updateData.state;
-        
-        // Define allowed state transitions (forward-only)
-        const allowedTransitions = {
-          'todo': ['inProgress', 'complete'],
-          'inProgress': ['complete'],
-          'complete': [] // No transitions allowed from complete
-        };
-        
-        // Allow keeping the same state (for updates that don't change state)
-        if (currentState !== newState && !allowedTransitions[currentState]?.includes(newState)) {
-          throw new Error(`Cannot move todo from ${currentState} to ${newState} - forward-only movement is enforced`);
-        }
-        
-        // Handle state transition timestamps
-        if (currentState !== newState) {
-          if (newState === 'inProgress' && !this.started_at) {
-            // First time moving to inProgress - set started_at
-            updates.push('started_at = CURRENT_TIMESTAMP');
-          } else if (newState === 'complete' && !this.completed_at) {
-            // First time moving to complete - set completed_at
-            updates.push('completed_at = CURRENT_TIMESTAMP');
-          }
-        }
-      }
-
-      for (const [key, value] of Object.entries(updateData)) {
-        if (allowedFields.includes(key)) {
-          updates.push(`${key} = $${paramCount}`);
-          values.push(value);
-          paramCount++;
-        }
-      }
-
-      if (updates.length === 0) {
-        throw new Error('No valid fields to update');
-      }
-
-      values.push(this.id);
-      const result = await query(
-        `UPDATE todos SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-         WHERE id = $${paramCount} 
-         RETURNING *`,
-        values
-      );
-
-      // Update instance properties
-      Object.assign(this, result.rows[0]);
-      
-      logger.info('Todo updated successfully', { todoId: this.id });
-      return this;
-    } catch (error) {
-      logger.error('Error updating todo', { error: error.message, todoId: this.id });
-      throw error;
-    }
-  }
-
-  // Delete todo
-  async delete() {
-    try {
-      await query('DELETE FROM todos WHERE id = $1', [this.id]);
-      logger.info('Todo deleted successfully', { todoId: this.id });
-      return true;
-    } catch (error) {
-      logger.error('Error deleting todo', { error: error.message, todoId: this.id });
-      throw error;
-    }
-  }
-
-  // Toggle completion status (forward-only: can only mark as complete, cannot unmark)
-  async toggleComplete() {
-    try {
-      // Get current state to determine if toggle is allowed
-      const currentResult = await query(
-        'SELECT completed, state FROM todos WHERE id = $1',
-        [this.id]
-      );
-      
-      if (currentResult.rows.length === 0) {
-        throw new Error('Todo not found');
-      }
-      
-      const currentCompleted = currentResult.rows[0].completed;
-      const currentState = currentResult.rows[0].state;
-      
-      // Only allow marking as complete, not unmarking
-      if (currentCompleted) {
-        // If already completed, don't allow toggle back to in-progress
-        throw new Error('Cannot unmark completed todo - forward-only movement is enforced');
-      }
-      
-      // Mark as complete
-      const result = await query(
-        'UPDATE todos SET completed = true, state = $2, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-        [this.id, 'complete']
-      );
-
-      this.completed = result.rows[0].completed;
-      this.state = result.rows[0].state;
-      this.updated_at = result.rows[0].updated_at;
-      this.completed_at = result.rows[0].completed_at;
-      
-      logger.info('Todo marked as complete', { 
-        todoId: this.id, 
-        completed: this.completed, 
-        state: this.state,
-        previousState: currentState 
-      });
-      return this;
-    } catch (error) {
-      logger.error('Error toggling todo completion', { error: error.message, todoId: this.id });
-      throw error;
-    }
-  }
-
-  // Bulk operations
-  static async bulkUpdate(todoIds, updateData) {
-    try {
-      const allowedFields = ['completed', 'priority', 'category'];
-      const updates = [];
-      const values = [];
-      let paramCount = 1;
-
-      for (const [key, value] of Object.entries(updateData)) {
-        if (allowedFields.includes(key)) {
-          updates.push(`${key} = $${paramCount}`);
-          values.push(value);
-          paramCount++;
-        }
-      }
-
-      if (updates.length === 0) {
-        throw new Error('No valid fields to update');
-      }
-
-      // Add todo IDs to values
-      const placeholders = todoIds.map((_, index) => `$${paramCount + index}`).join(',');
-      values.push(...todoIds);
-
-      const result = await query(
-        `UPDATE todos SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-         WHERE id IN (${placeholders}) 
-         RETURNING *`,
-        values
-      );
-      
-      logger.info('Bulk todo update completed', { count: result.rows.length });
-      return result.rows.map(row => new Todo(row));
-    } catch (error) {
-      logger.error('Error in bulk todo update', { error: error.message });
-      throw error;
-    }
-  }
-
-  static async bulkDelete(todoIds) {
-    try {
-      const placeholders = todoIds.map((_, index) => `$${index + 1}`).join(',');
-      const result = await query(
-        `DELETE FROM todos WHERE id IN (${placeholders})`,
-        todoIds
-      );
-      
-      logger.info('Bulk todo deletion completed', { count: result.rowCount });
-      return result.rowCount;
-    } catch (error) {
-      logger.error('Error in bulk todo deletion', { error: error.message });
-      throw error;
-    }
-  }
-
   // Search todos
   static async search(userId, searchTerm, options = {}) {
     try {
       const { limit = 50, offset = 0 } = options;
       
-      const result = await query(
+      const result = await Todo.query(
         `SELECT * FROM todos 
          WHERE user_id = $1 AND (title ILIKE $2 OR description ILIKE $2) 
          ORDER BY created_at DESC 
@@ -321,7 +123,7 @@ class Todo {
   // Get todos by due date range
   static async findByDueDateRange(userId, startDate, endDate) {
     try {
-      const result = await query(
+      const result = await Todo.query(
         `SELECT * FROM todos 
          WHERE user_id = $1 AND due_date BETWEEN $2 AND $3 
          ORDER BY due_date ASC`,
@@ -338,16 +140,16 @@ class Todo {
   // Count todos by user
   static async countByUserId(userId, options = {}) {
     try {
-      const { completed, priority, category } = options;
+      const { status, priority, category } = options;
       
       let whereClause = 'WHERE user_id = $1';
       const values = [userId];
       let paramCount = 1;
 
-      if (completed !== undefined) {
+      if (status) {
         paramCount++;
-        whereClause += ` AND completed = $${paramCount}`;
-        values.push(completed);
+        whereClause += ` AND status = $${paramCount}`;
+        values.push(status);
       }
 
       if (priority) {
@@ -362,7 +164,7 @@ class Todo {
         values.push(category);
       }
 
-      const result = await query(
+      const result = await Todo.query(
         `SELECT COUNT(*) as count FROM todos ${whereClause}`,
         values
       );
@@ -370,35 +172,6 @@ class Todo {
       return parseInt(result.rows[0].count);
     } catch (error) {
       logger.error('Error counting todos by user ID', { error: error.message, userId });
-      throw error;
-    }
-  }
-
-  // Get todo statistics for user
-  static async getStats(userId) {
-    try {
-      const result = await query(
-        `SELECT 
-           COUNT(*) as total,
-           COUNT(CASE WHEN (completed = true OR state = 'complete') THEN 1 END) as completed,
-           COUNT(CASE WHEN state = 'inProgress' THEN 1 END) as pending,
-           COUNT(CASE WHEN priority = 'high' THEN 1 END) as high_priority,
-           COUNT(CASE WHEN due_date < CURRENT_TIMESTAMP AND (completed = false AND state != 'complete') THEN 1 END) as overdue
-         FROM todos WHERE user_id = $1`,
-        [userId]
-      );
-      
-      // Convert string counts to integers
-      const stats = result.rows[0];
-      return {
-        total: parseInt(stats.total),
-        completed: parseInt(stats.completed),
-        pending: parseInt(stats.pending),
-        high_priority: parseInt(stats.high_priority),
-        overdue: parseInt(stats.overdue)
-      };
-    } catch (error) {
-      logger.error('Error getting todo stats', { error: error.message, userId });
       throw error;
     }
   }
@@ -444,13 +217,13 @@ class Todo {
       }
 
       // Add status filter
-      if (status === 'completed') {
-        whereClause += ` AND t.completed = true`;
-      } else if (status === 'pending') {
-        whereClause += ` AND t.completed = false`;
+      if (status) {
+        paramCount++;
+        whereClause += ` AND t.status = $${paramCount}`;
+        params.push(status);
       }
 
-      const result = await query(
+      const result = await Todo.query(
         `SELECT t.*, 
                 COALESCE(
                   json_agg(
@@ -478,7 +251,7 @@ class Todo {
       );
 
       // Get total count
-      const countResult = await query(
+      const countResult = await Todo.query(
         `SELECT COUNT(DISTINCT t.id) as total
          FROM todos t
          ${whereClause}`,
@@ -574,10 +347,10 @@ class Todo {
       }
 
       // Add status filter
-      if (status === 'completed') {
-        whereClause += ` AND t.completed = true`;
-      } else if (status === 'pending') {
-        whereClause += ` AND t.completed = false`;
+      if (status) {
+        paramCount++;
+        whereClause += ` AND t.status = $${paramCount}`;
+        params.push(status);
       }
 
       // Add date range filters
@@ -617,7 +390,7 @@ class Todo {
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
       const validSortDirection = ['ASC', 'DESC'].includes(sortDirection.toUpperCase()) ? sortDirection.toUpperCase() : 'DESC';
 
-      const result = await query(
+      const result = await Todo.query(
         `SELECT t.*, 
                 COALESCE(
                   json_agg(
@@ -645,7 +418,7 @@ class Todo {
       );
 
       // Get total count
-      const countResult = await query(
+      const countResult = await Todo.query(
         `SELECT COUNT(DISTINCT t.id) as total
          FROM todos t
          ${whereClause}`,

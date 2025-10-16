@@ -1,5 +1,16 @@
 import React from 'react';
 import { cn } from '../../utils/helpers';
+import { getPriorityBadgeClass } from '../../utils/colors';
+import { 
+  Briefcase, 
+  User, 
+  ShoppingCart, 
+  Heart, 
+  DollarSign, 
+  Book, 
+  MapPin, 
+  MoreHorizontal 
+} from 'lucide-react';
 
 const Badge = React.forwardRef(({
   children,
@@ -48,16 +59,10 @@ Badge.displayName = 'Badge';
 
 // Priority badge component
 export const PriorityBadge = ({ priority, className, ...props }) => {
-  const priorityVariants = {
-    low: 'success',
-    medium: 'warning',
-    high: 'error',
-  };
-
   return (
     <Badge
-      variant={priorityVariants[priority] || 'default'}
-      className={cn('font-medium', className)}
+      variant="outline"
+      className={cn('font-medium', getPriorityBadgeClass(priority), className)}
       {...props}
     >
       {priority?.charAt(0).toUpperCase() + priority?.slice(1)}
@@ -88,6 +93,34 @@ export const StatusBadge = ({ status, className, ...props }) => {
       {...props}
     >
       {statusLabels[status] || status}
+    </Badge>
+  );
+};
+
+// Category badge component with icons
+export const CategoryBadge = ({ category, className, size = 'sm', ...props }) => {
+  const iconMap = {
+    work: Briefcase,
+    personal: User,
+    shopping: ShoppingCart,
+    health: Heart,
+    finance: DollarSign,
+    education: Book,
+    travel: MapPin,
+    other: MoreHorizontal,
+  };
+
+  const IconComponent = iconMap[category];
+  
+  return (
+    <Badge
+      variant="secondary"
+      size={size}
+      className={cn('font-medium', className)}
+      {...props}
+    >
+      {IconComponent && <IconComponent className="w-3 h-3 mr-1" />}
+      {category?.charAt(0).toUpperCase() + category?.slice(1)}
     </Badge>
   );
 };

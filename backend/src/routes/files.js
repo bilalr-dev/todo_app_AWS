@@ -1,10 +1,12 @@
 // File attachment routes for v0.6
 const express = require('express');
 const path = require('path');
-const fs = require('fs').promises;
+const fs = require('fs');
+const fsPromises = require('fs').promises;
 const { authenticateToken } = require('../middleware/auth');
 const { uploadSingle, uploadMultiple } = require('../middleware/upload');
 const FileAttachment = require('../models/FileAttachment');
+const FileService = require('../services/FileService');
 const fileProcessor = require('../utils/fileProcessor');
 const { logger } = require('../utils/logger');
 
@@ -44,23 +46,42 @@ router.post('/upload/:todoId', authenticateToken, ...uploadSingle('file'), async
 
             // Process the uploaded file
             const fileData = await fileProcessor.processFile(req.file);
-
-            // Create file attachment record with resolved name
-            const attachment = await FileAttachment.create({
-              todo_id: todoId,
+            
+            logger.debug('fileProcessor.processFile result', { 
               filename: fileData.filename,
-              original_name: resolvedOriginalName,
-              file_path: fileData.filePath,
-              file_size: fileData.fileSize,
-              mime_type: fileData.mimeType,
-              file_type: fileData.fileType,
-              thumbnail_path: fileData.thumbnailPath
+              filePath: fileData.filePath,
+              mimeType: fileData.mimeType,
+              fileType: fileData.fileType,
+              thumbnailPath: fileData.thumbnailPath
+            });
+
+            // Create file attachment record using FileService
+            const attachment = await FileService.uploadFile(todoId, {
+              filename: fileData.filename,
+              originalName: resolvedOriginalName,
+              filePath: fileData.filePath,
+              fileSize: fileData.fileSize,
+              mimeType: fileData.mimeType,
+              fileType: fileData.fileType,
+              thumbnailPath: fileData.thumbnailPath
             });
 
     res.status(201).json({
       success: true,
       message: 'File uploaded successfully',
-      attachment: attachment.toJSON()
+      attachment: {
+        id: attachment.id,
+        todo_id: attachment.todo_id,
+        filename: attachment.filename,
+        original_name: attachment.original_name,
+        file_path: attachment.file_path,
+        file_size: attachment.file_size,
+        mime_type: attachment.mime_type,
+        file_type: attachment.file_type,
+        thumbnail_path: attachment.thumbnail_path,
+        created_at: attachment.created_at,
+        updated_at: attachment.updated_at
+      }
     });
   } catch (error) {
     logger.error('Error uploading file:', error);
@@ -120,15 +141,14 @@ router.post('/upload-multiple/:todoId', authenticateToken, uploadMultiple('files
         
         const fileData = await fileProcessor.processFile(file);
         
-        const attachment = await FileAttachment.create({
-          todo_id: todoId,
+        const attachment = await FileService.uploadFile(todoId, {
           filename: fileData.filename,
-          original_name: resolvedOriginalName,
-          file_path: fileData.filePath,
-          file_size: fileData.fileSize,
-          mime_type: fileData.mimeType,
-          file_type: fileData.fileType,
-          thumbnail_path: fileData.thumbnailPath
+          originalName: resolvedOriginalName,
+          filePath: fileData.filePath,
+          fileSize: fileData.fileSize,
+          mimeType: fileData.mimeType,
+          fileType: fileData.fileType,
+          thumbnailPath: fileData.thumbnailPath
         });
 
         attachments.push(attachment.toJSON());
@@ -319,7 +339,7 @@ router.get('/download/:id', authenticateToken, async (req, res) => {
     
     // Check if file exists
     try {
-      await fs.access(filePath);
+      await fsPromises.access(filePath);
     } catch (error) {
       return res.status(404).json({
         success: false,
@@ -333,7 +353,7 @@ router.get('/download/:id', authenticateToken, async (req, res) => {
     res.setHeader('Content-Length', attachment.file_size);
 
     // Stream the file
-    const fileStream = require('fs').createReadStream(filePath);
+    const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
 
   } catch (error) {
@@ -377,16 +397,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Delete file from disk
-    const filePath = path.join(__dirname, '../../uploads', attachment.file_path);
-    const thumbnailPath = attachment.thumbnail_path 
-      ? path.join(__dirname, '../../uploads', attachment.thumbnail_path)
-      : null;
-
-    await fileProcessor.deleteFile(filePath, thumbnailPath);
-
-    // Delete from database
-    await attachment.delete();
+    // Delete file using FileService (handles both disk and database deletion)
+    await FileService.deleteFile(id);
 
 
     res.json({

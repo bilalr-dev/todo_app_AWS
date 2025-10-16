@@ -76,7 +76,7 @@ const FileAttachment = ({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download error:', error);
+      // Download failed, user will see the error through UI feedback
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ const FileAttachment = ({
             await onDelete(attachment.id);
           }
         } catch (error) {
-          console.error('Delete error:', error);
+          // Delete failed, user will see the error through UI feedback
         } finally {
           setLoading(false);
         }
@@ -132,7 +132,6 @@ const FileAttachment = ({
           window.URL.revokeObjectURL(url);
         }, 1000);
       } catch (error) {
-        console.error('Preview error:', error);
         alert('Failed to preview file. Please try downloading it instead.');
       } finally {
         setLoading(false);

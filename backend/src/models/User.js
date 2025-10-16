@@ -1,4 +1,4 @@
-// User model for database operations v0.5
+// User model for database operations v0.6 - Optimized Architecture
 const bcrypt = require('bcryptjs');
 const { query } = require('../config/database');
 const { logger } = require('../utils/logger');

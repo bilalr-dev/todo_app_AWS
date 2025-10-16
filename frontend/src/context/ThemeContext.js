@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth } from './AuthProvider';
 
 // Theme context
 const ThemeContext = createContext();
@@ -58,7 +58,7 @@ export const ThemeProvider = ({ children }) => {
       try {
         await updateProfile({ theme_preference: newTheme }, false);
       } catch (error) {
-        console.error('Failed to save theme preference:', error);
+        // Silently fail if theme preference can't be saved
       }
     }
   };
@@ -73,7 +73,7 @@ export const ThemeProvider = ({ children }) => {
         try {
           await updateProfile({ theme_preference: newTheme }, false);
         } catch (error) {
-          console.error('Failed to save theme preference:', error);
+          // Silently fail if theme preference can't be saved
         }
       }
     }

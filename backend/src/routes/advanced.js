@@ -277,7 +277,7 @@ router.get('/analytics', authenticateToken, async (req, res) => {
       `SELECT 
          DATE(created_at) as date,
          COUNT(*) as total_created,
-         COUNT(CASE WHEN completed = true THEN 1 END) as completed
+         COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed
        FROM todos 
        WHERE user_id = $1 ${dateFilter}
        GROUP BY DATE(created_at)

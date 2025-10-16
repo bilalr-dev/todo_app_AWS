@@ -81,7 +81,7 @@ export default function(data) {
     description: 'This is a load test todo',
     priority: 'medium',
     category: 'work',
-    due_date: '2024-12-31',
+    due_date: '2025-12-31',
   };
   
   const createResponse = http.post(`${data.baseUrl}/api/todos`, JSON.stringify(todoData), { headers });

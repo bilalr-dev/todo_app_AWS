@@ -10,13 +10,14 @@ export const cn = (...inputs) => {
 export const formatDate = (date, options = {}) => {
   if (!date) return '';
   
+  // Default to DD/MM/YYYY format
   const defaultOptions = {
+    day: '2-digit',
+    month: '2-digit',
     year: 'numeric',
-    month: 'short',
-    day: 'numeric',
   };
   
-  return new Date(date).toLocaleDateString('en-US', { ...defaultOptions, ...options });
+  return new Date(date).toLocaleDateString('en-GB', { ...defaultOptions, ...options });
 };
 
 // Get today's date in user's timezone as YYYY-MM-DD format
@@ -28,14 +29,14 @@ export const formatDateTime = (date, options = {}) => {
   if (!date) return '';
   
   const defaultOptions = {
+    day: '2-digit',
+    month: '2-digit',
     year: 'numeric',
-    month: 'short',
-    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   };
   
-  return new Date(date).toLocaleDateString('en-US', { ...defaultOptions, ...options });
+  return new Date(date).toLocaleDateString('en-GB', { ...defaultOptions, ...options });
 };
 
 export const formatRelativeTime = (date) => {

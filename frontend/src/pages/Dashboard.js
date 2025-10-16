@@ -1,11 +1,12 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { useTodos } from '../context/TodoContext';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useTodos } from '../context/TodoProvider';
+import { useAuth } from '../context/AuthProvider';
 import { useToast } from '../context/ToastContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { Badge, PriorityBadge } from '../components/common/Badge';
+import { Badge, PriorityBadge, CategoryBadge } from '../components/common/Badge';
+import Tooltip from '../components/common/Tooltip';
 import { LoadingSkeleton } from '../components/common/Loading';
 import DatePicker from '../components/common/DatePicker';
 import ConfirmDialog from '../components/common/ConfirmDialog';
@@ -14,6 +15,8 @@ import FileUpload from '../components/common/FileUpload';
 import FileAttachment from '../components/common/FileAttachment';
 import AdvancedSearch from '../components/common/AdvancedSearch';
 import KanbanBoard from '../components/common/KanbanBoard';
+import TodoListItem from '../components/common/TodoListItem';
+import RichTextEditor from '../components/common/RichTextEditor';
 import { 
   Plus, 
   Search, 
@@ -27,8 +30,6 @@ import {
   AlertTriangle,
   ClipboardList,
   CheckSquare,
-  Square,
-  File,
   Flag,
   Tag,
   X,
@@ -36,11 +37,14 @@ import {
   List,
   Grid
 } from 'lucide-react';
-import { cn, formatDate, formatRelativeTime, isToday, isTomorrow, isOverdue, getTodayInUserTimezone } from '../utils/helpers';
+import { formatDate, formatRelativeTime, isToday, isTomorrow, isOverdue, getTodayInUserTimezone } from '../utils/helpers';
 import { TODO_CONFIG } from '../utils/constants';
+import { TODO_COLOR_CLASSES, getDueDateBadgeClass, getDueDateTextClass } from '../utils/colors';
+import { exportData } from '../utils/exportUtils';
 
 const Dashboard = () => {
   const {
+    todos,
     filteredTodos,
     stats,
     filters,
@@ -53,7 +57,11 @@ const Dashboard = () => {
     clearFilters,
     loadTodos,
     setTodos,
-    updateBulkState,
+    bulkUpdate,
+    bulkDelete,
+    searchTodos,
+    advancedSearch,
+    getSearchSuggestions,
   } = useTodos();
   
   const { user } = useAuth();
@@ -67,6 +75,7 @@ const Dashboard = () => {
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({});
   const [isAdvancedSearching, setIsAdvancedSearching] = useState(false);
+  const [clearAdvancedSearchTrigger, setClearAdvancedSearchTrigger] = useState(0);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
   const [newTodo, setNewTodo] = useState({
     title: '',
@@ -79,40 +88,86 @@ const Dashboard = () => {
   const [editingTodo, setEditingTodo] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, todo: null });
   const [viewingTodo, setViewingTodo] = useState(null);
+  const [createdTodoId, setCreatedTodoId] = useState(null);
+  const [isCreatingWithFiles, setIsCreatingWithFiles] = useState(false);
+  const [isUserCancelling, setIsUserCancelling] = useState(false);
   
   // File upload refs and state
   const fileUploadRef = useRef(null);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingFiles, setDeletingFiles] = useState(new Set());
+  const [pendingFileDeletions, setPendingFileDeletions] = useState(new Set());
 
+  // Sync viewingTodo with latest todos data
+  useEffect(() => {
+    if (viewingTodo && todos.length > 0) {
+      const updatedTodo = todos.find(t => t.id === viewingTodo.id);
+      if (updatedTodo && JSON.stringify(updatedTodo) !== JSON.stringify(viewingTodo)) {
+        // Only update if the change is significant (not just file count changes)
+        const significantChanges = ['title', 'description', 'status', 'priority', 'category', 'due_date'];
+        const hasSignificantChanges = significantChanges.some(field => 
+          updatedTodo[field] !== viewingTodo[field]
+        );
+        
+        if (hasSignificantChanges) {
+          setViewingTodo(updatedTodo);
+        }
+      }
+    }
+  }, [todos, viewingTodo]);
 
   // Handle filter search changes (dashboard search)
   const handleFilterChange = (key, value) => {
     setFilters({ ...filters, [key]: value });
   };
 
+  // Debounced search function
+  const [searchTimeout, setSearchTimeout] = useState(null);
+  const handleSearchChange = useCallback((value) => {
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
 
-  // Helper function to get state badge info
-  const getStateBadgeInfo = (state) => {
-    switch (state) {
-      case 'todo':
-        return { label: 'Todo', variant: 'secondary', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' };
-      case 'inProgress':
-        return { label: 'In Progress', variant: 'warning', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' };
-      case 'complete':
-        return { label: 'Complete', variant: 'success', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' };
+    // Update the filter immediately for UI responsiveness
+    setFilters({ ...filters, search: value });
+
+    // If search is empty, load all todos
+    if (!value.trim()) {
+      loadTodos();
+      return;
+    }
+
+    // Debounce the actual search
+    const timeout = setTimeout(() => {
+      searchTodos(value);
+    }, 300); // 300ms delay
+
+    setSearchTimeout(timeout);
+  }, [filters, searchTodos, loadTodos, searchTimeout]);
+
+
+  // Helper function to get status badge info
+  const getStatusBadgeInfo = (status) => {
+    switch (status) {
+      case 'pending':
+        return { label: 'To Do', variant: 'secondary', className: TODO_COLOR_CLASSES.TODO_BADGE };
+      case 'in_progress':
+        return { label: 'In Progress', variant: 'warning', className: TODO_COLOR_CLASSES.IN_PROGRESS_BADGE };
+      case 'completed':
+        return { label: 'Completed', variant: 'success', className: TODO_COLOR_CLASSES.COMPLETED_BADGE };
       default:
-        return { label: 'Todo', variant: 'secondary', className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' };
+        return { label: 'To Do', variant: 'secondary', className: TODO_COLOR_CLASSES.TODO_BADGE };
     }
   };
 
   // Helper function to get action time info
   const getActionTimeInfo = (todo) => {
-    const { state, created_at, updated_at, completed, started_at, completed_at } = todo;
+    const { status, created_at, updated_at, started_at, completed_at } = todo;
     
     // For completed todos, show when they were completed (completed_at or updated_at as fallback)
-    if (state === 'complete' || completed) {
+    if (status === 'completed') {
       return {
         label: 'Completed at:',
         time: completed_at || updated_at
@@ -120,7 +175,7 @@ const Dashboard = () => {
     }
     
     // For in-progress todos, show when they were moved to in-progress (started_at or updated_at as fallback)
-    if (state === 'inProgress') {
+    if (status === 'in_progress') {
       return {
         label: 'Started at:',
         time: started_at || updated_at
@@ -146,52 +201,83 @@ const Dashboard = () => {
         delete todoData.due_date;
       }
       
-      
       // Check if there are files to upload
       const hasFiles = selectedFiles.length > 0 && fileUploadRef.current;
       
-      // First create the todo (suppress notification and local state update if files will be uploaded)
+      // Create the todo first (suppress notification and local state update if files will be uploaded)
       const result = await createTodo(todoData, !hasFiles, !hasFiles);
       if (result.success) {
-        // If there are selected files, upload them
+        // Set the created todo ID for file upload
+        setCreatedTodoId(result.todo.id);
+        
         if (hasFiles) {
+          // FLOW 1: Files to upload - upload them to the created todo
           setIsUploading(true);
+          setIsCreatingWithFiles(true);
           try {
-            await fileUploadRef.current.uploadFiles();
+            // Upload files to the newly created todo
+            // Pass the todoId directly to the upload function
+            await fileUploadRef.current.uploadFiles(result.todo.id);
+            
             // Show success notification after upload is complete
-            showToast('Todo created successfully!', 'success');
+            showToast('To Do created successfully!', 'success');
+            
+            // Clear form and close modal (only after file upload is complete)
+            setNewTodo({
+              title: '',
+              description: '',
+              priority: 'low',
+              category: '',
+              due_date: getTodayInUserTimezone(),
+              state: 'todo',
+            });
+            setSelectedFiles([]);
+            setCreatedTodoId(null);
+            setIsCreatingWithFiles(false);
+            if (fileUploadRef.current) {
+              fileUploadRef.current.clearFiles();
+            }
+            setShowNewTodo(false);
+            
+            // Refresh the dashboard to show the new todo with files
+            await loadTodos();
           } catch (uploadError) {
             // Check if it's a cancellation (expected) or actual error
             if (uploadError.message === 'Upload cancelled') {
               // Don't reload todos for cancellation - keep existing state
+              showToast('Upload cancelled', 'warning');
+            } else if (uploadError.message === 'Upload cancelled silently') {
+              // Silent cancellation - don't show toast, don't reload todos
+              // This is handled by the user cancellation logic
             } else {
-              // Don't reload todos to prevent file attachments from disappearing
+              // Upload failed, but todo was created - show error
+              showToast('File upload failed, but todo was created', 'error');
             }
           } finally {
             setIsUploading(false);
+            setIsCreatingWithFiles(false);
+            setIsUserCancelling(false); // Reset the flag
           }
-        }
-        
-        // Clear form and close modal
+        } else {
+          // FLOW 2: No files to upload, clear form and close modal immediately
         setNewTodo({
           title: '',
           description: '',
-          priority: 'low', // Default priority changed to low
+            priority: 'low',
           category: '',
-          due_date: getTodayInUserTimezone(), // Default to today's date (mandatory)
-    state: 'todo', // Default state for new todos
+            due_date: getTodayInUserTimezone(),
+            state: 'todo',
         });
         setSelectedFiles([]);
+          setCreatedTodoId(null);
         if (fileUploadRef.current) {
           fileUploadRef.current.clearFiles();
         }
         setShowNewTodo(false);
-        
-        // Refresh the dashboard to show the new file
-        await loadTodos();
+        }
       }
     } catch (error) {
-      // Error creating todo
+      showToast('Failed to create todo', 'error');
     }
   };
 
@@ -222,10 +308,42 @@ const Dashboard = () => {
     setDeleteConfirm({ isOpen: false, todo: null });
   };
 
-  const handleCancelTodo = () => {
+  const handleCancelTodo = async () => {
+    // Set flag to indicate user-initiated cancellation
+    setIsUserCancelling(true);
+    
     // Cancel any pending uploads first
     if (fileUploadRef.current) {
       fileUploadRef.current.cancelUploads();
+    }
+    
+    // Handle cancellation based on whether we're creating or editing
+    if (editingTodo) {
+      // Edit mode cancellation - restore original todo state
+      showToast('Todo update cancelled', 'warning');
+      
+      // Restore the original todo state by reloading from the todos list
+      const originalTodo = todos.find(t => t.id === editingTodo.id);
+      if (originalTodo) {
+        setEditingTodo(originalTodo);
+        // Also update viewingTodo if it's the same todo
+        if (viewingTodo && viewingTodo.id === editingTodo.id) {
+          setViewingTodo(originalTodo);
+        }
+      }
+      
+      // Clear pending file deletions
+      setPendingFileDeletions(new Set());
+    } else {
+      // Create mode cancellation
+      if (isCreatingWithFiles && createdTodoId) {
+        try {
+          await deleteTodo(createdTodoId, false); // Suppress the delete notification
+          showToast('Todo creation cancelled', 'warning');
+        } catch (error) {
+          showToast('Todo was created but upload was cancelled', 'warning');
+        }
+      }
     }
     
     setEditingTodo(null);
@@ -237,7 +355,11 @@ const Dashboard = () => {
       due_date: getTodayInUserTimezone(),
     });
     setSelectedFiles([]);
+    setCreatedTodoId(null);
+    setIsCreatingWithFiles(false);
+    setIsUserCancelling(false);
     setIsUploading(false);
+    setPendingFileDeletions(new Set());
     if (fileUploadRef.current) {
       fileUploadRef.current.clearFiles();
     }
@@ -254,6 +376,7 @@ const Dashboard = () => {
       due_date: todo.due_date || getTodayInUserTimezone(),
       state: todo.state || 'todo',
     });
+    setPendingFileDeletions(new Set()); // Clear any pending deletions when starting edit
     setShowNewTodo(true);
   };
 
@@ -268,11 +391,11 @@ const Dashboard = () => {
   const handleUpdateTodo = async (e) => {
     e.preventDefault();
     
-    if (!newTodo.title.trim()) return;
+    if (!editingTodo.title.trim()) return;
     
     try {
       // Prepare update data - exclude due_date if it's in the past
-      const updateData = { ...newTodo };
+      const updateData = { ...editingTodo };
       
       // Check if due_date is in the past and exclude it from update
       if (updateData.due_date) {
@@ -290,26 +413,60 @@ const Dashboard = () => {
       // Check if there are files to upload
       const hasFiles = selectedFiles.length > 0 && fileUploadRef.current;
       
-      // First update the todo (suppress notification and local state update if files will be uploaded)
-      const result = await updateTodo(editingTodo.id, updateData, !hasFiles, !hasFiles);
+      // Update the todo (always update local state, but suppress notification if files will be uploaded)
+      const result = await updateTodo(editingTodo.id, updateData, !hasFiles, true);
       if (result.success) {
-        // If there are selected files, upload them and wait for completion
+        // Delete any pending files that were marked for deletion during edit
+        if (pendingFileDeletions.size > 0) {
+          const token = localStorage.getItem('token');
+          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
+          
+          // Delete all pending files
+          const deletePromises = Array.from(pendingFileDeletions).map(async (fileId) => {
+            try {
+              const response = await fetch(`${apiUrl}/files/${fileId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              });
+              if (!response.ok) {
+                throw new Error(`Failed to delete file ${fileId}`);
+              }
+            } catch (error) {
+              // Continue with other deletions even if one fails
+            }
+          });
+          
+          await Promise.all(deletePromises);
+          
+          // Clear pending deletions
+          setPendingFileDeletions(new Set());
+        }
+        
+        // If there are selected files, upload them silently
         if (hasFiles) {
           setIsUploading(true);
           try {
             await fileUploadRef.current.uploadFiles();
-            // Show success notification after upload is complete
-            showToast('Todo updated successfully!', 'success');
+            // No toast notification for file uploads
           } catch (uploadError) {
             // Check if it's a cancellation (expected) or actual error
             if (uploadError.message === 'Upload cancelled') {
-              // Don't reload todos for cancellation - keep existing attachments
+              // For cancellation, don't close the form - let user continue editing
+              setIsUploading(false);
+              return; // Exit early, don't close the form
+            } else if (uploadError.message === 'Upload cancelled silently') {
+              // Silent cancellation - don't show toast, don't close form
+              setIsUploading(false);
+              return; // Exit early, don't close the form
             } else {
               // Don't reload todos to prevent file attachments from disappearing
-            }
-          } finally {
             setIsUploading(false);
           }
+          }
+          // Only set uploading to false if we didn't return early
+          setIsUploading(false);
         }
         
         // Only clear form and close modal after all operations are complete
@@ -326,6 +483,7 @@ const Dashboard = () => {
         if (fileUploadRef.current) {
           fileUploadRef.current.clearFiles();
         }
+        setPendingFileDeletions(new Set());
         setShowNewTodo(false);
         
         // Refresh the dashboard to show the new file
@@ -340,18 +498,45 @@ const Dashboard = () => {
     if (!dueDate) return { text: 'No due date', className: 'text-muted-foreground' };
     
     if (isOverdue(dueDate)) {
-      return { text: 'Overdue', className: 'text-red-600 font-medium' };
+      return { text: 'Overdue', className: getDueDateTextClass(dueDate) };
     }
     
     if (isToday(dueDate)) {
-      return { text: 'Due today', className: 'text-orange-600 font-medium' };
+      return { text: 'Due today', className: getDueDateTextClass(dueDate) };
     }
     
     if (isTomorrow(dueDate)) {
-      return { text: 'Due tomorrow', className: 'text-blue-600 font-medium' };
+      return { text: 'Due tomorrow', className: getDueDateTextClass(dueDate) };
     }
     
-    return { text: formatDate(dueDate), className: 'text-muted-foreground' };
+    return { text: formatDate(dueDate), className: getDueDateTextClass(dueDate) };
+  };
+
+  // For details card - uses full badge styling with background
+  const getDueDateBadgeInfo = (dueDate, todoStatus = null) => {
+    if (!dueDate) return { text: 'No due date', className: 'text-muted-foreground' };
+    
+    // For completed todos, always show the actual date in DD/MM/YYYY format
+    if (todoStatus === 'completed') {
+      return { 
+        text: formatDate(dueDate), 
+        className: 'text-gray-700 dark:text-gray-300'
+      };
+    }
+    
+    if (isOverdue(dueDate)) {
+      return { text: 'Overdue', className: getDueDateBadgeClass(dueDate) };
+    }
+    
+    if (isToday(dueDate)) {
+      return { text: 'Due today', className: getDueDateBadgeClass(dueDate) };
+    }
+    
+    if (isTomorrow(dueDate)) {
+      return { text: 'Due tomorrow', className: getDueDateBadgeClass(dueDate) };
+    }
+    
+    return { text: formatDate(dueDate), className: getDueDateBadgeClass(dueDate) };
   };
 
   // Handle individual todo selection for bulk operations
@@ -360,7 +545,7 @@ const Dashboard = () => {
     const todo = filteredTodos.find(t => t.id === todoId);
     
     // Don't allow selection of completed todos
-    if (todo && (todo.completed || todo.state === 'complete')) {
+    if (todo && todo.status === 'completed') {
       showToast('Cannot select completed todos for bulk operations', 'warning');
       return;
     }
@@ -374,7 +559,7 @@ const Dashboard = () => {
 
   const handleSelectAll = () => {
     // Filter out completed todos for selection
-    const selectableTodos = filteredTodos.filter(todo => !todo.completed && todo.state !== 'complete');
+    const selectableTodos = filteredTodos.filter(todo => todo.status !== 'completed');
     const selectableTodoIds = selectableTodos.map(todo => todo.id);
     
     if (selectedTodos.length === selectableTodoIds.length) {
@@ -416,7 +601,7 @@ const Dashboard = () => {
         currentColumn = 'complete';
       } else {
         // Fallback for existing todos without state field
-        currentColumn = todo.completed ? 'complete' : 'todo';
+        currentColumn = todo.status === 'completed' ? 'complete' : 'todo';
       }
 
       // Enforce forward-only movement: Todo → In Progress → Complete
@@ -433,83 +618,33 @@ const Dashboard = () => {
       let updateData = {};
       
       if (targetColumn === 'complete') {
-        updateData = { completed: true, state: 'complete' };
+        updateData = { status: 'completed' };
       } else if (targetColumn === 'in-progress') {
-        updateData = { completed: false, state: 'inProgress' };
+        updateData = { status: 'in_progress' };
       } else if (targetColumn === 'todo') {
-        updateData = { completed: false, state: 'todo' };
+        updateData = { status: 'pending' };
       }
 
-      await updateTodo(todoId, updateData, true); // Keep the default "Todo updated successfully!" notification
+      await updateTodo(todoId, updateData, true); // Keep the default "To Do updated successfully!" notification
       // Removed the duplicate "Todo moved to [column]" notification
     } catch (error) {
-      console.error('Error moving todo:', error);
       showToast('Failed to move todo', 'error');
     }
   };
 
   // Export todos functionality - exports selected todos or all todos if none selected
   const handleExportTodos = () => {
-    try {
-      let todosToExport;
-      let exportType;
-      
-      if (selectedTodos.length > 0) {
-        // Export only selected todos
-        todosToExport = filteredTodos.filter(todo => selectedTodos.includes(todo.id));
-        exportType = 'selected';
-      } else {
-        // Export all todos (including completed ones) when none are selected
-        todosToExport = filteredTodos;
-        exportType = 'all';
-      }
+    const result = exportData({
+      todos: filteredTodos,
+      user: user,
+      exportType: 'todos',
+      selectedTodos: selectedTodos
+    });
 
-      if (todosToExport.length === 0) {
-        showToast('No todos to export', 'warning');
-        return;
-      }
-
-      // Create export data with metadata
-      const exportData = {
-        exportInfo: {
-          exportedAt: new Date().toISOString(),
-          exportedBy: user?.username || 'Unknown User',
-          totalTodos: todosToExport.length,
-          exportType: exportType,
-          version: '1.0'
-        },
-        todos: todosToExport.map(todo => ({
-          id: todo.id,
-          title: todo.title,
-          description: todo.description,
-          priority: todo.priority,
-          category: todo.category,
-          completed: todo.completed,
-          due_date: todo.due_date,
-          created_at: todo.created_at,
-          updated_at: todo.updated_at,
-          attachments: todo.attachments || [],
-          file_count: todo.file_count || 0
-        }))
-      };
-
-      // Create and download the file
-      const dataStr = JSON.stringify(exportData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-      
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `todos_export_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      showToast(`Successfully exported ${todosToExport.length} selected todo${todosToExport.length !== 1 ? 's' : ''}`, 'success');
-    } catch (error) {
-      console.error('Export error:', error);
-      showToast('Failed to export todos', 'error');
+    if (result.success) {
+      showToast(result.message, 'success');
+    } else {
+      showToast(result.message, 'error');
     }
   };
 
@@ -519,7 +654,7 @@ const Dashboard = () => {
       // Filter out completed todos from the selection
       const validTodoIds = selectedTodos.filter(todoId => {
         const todo = filteredTodos.find(t => t.id === todoId);
-        return todo && !todo.completed && todo.state !== 'complete';
+        return todo && todo.status !== 'completed';
       });
 
       if (validTodoIds.length === 0) {
@@ -532,70 +667,38 @@ const Dashboard = () => {
         setSelectedTodos(validTodoIds);
       }
 
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-      let endpoint = '';
-      let method = 'PATCH';
-      let requestBody = { todoIds: validTodoIds, ...data };
+      let result;
 
       switch (action) {
         case 'complete':
-          endpoint = `${apiUrl}/bulk/todos/complete`;
-          requestBody = { todoIds: validTodoIds };
+          result = await bulkUpdate(validTodoIds, { status: 'completed' });
           break;
         case 'in-progress':
-          // Set state to inProgress for todos moved to in-progress
-          endpoint = `${apiUrl}/bulk/todos/pending`;
-          requestBody = { todoIds: validTodoIds };
+          result = await bulkUpdate(validTodoIds, { status: 'in_progress' });
           break;
         case 'delete':
-          endpoint = `${apiUrl}/bulk/todos`;
-          method = 'DELETE';
-          requestBody = { todoIds: validTodoIds };
+          result = await bulkDelete(validTodoIds);
           break;
         case 'priority':
-          endpoint = `${apiUrl}/bulk/todos/priority`;
-          requestBody = { todoIds: validTodoIds, priority: data.priority };
+          result = await bulkUpdate(validTodoIds, { priority: data.priority });
           break;
         case 'category':
-          endpoint = `${apiUrl}/bulk/todos/category`;
-          requestBody = { todoIds: validTodoIds, category: data.category };
+          result = await bulkUpdate(validTodoIds, { category: data.category });
           break;
         case 'export':
           // Handle export separately
           handleExportSelected();
           return;
         default:
-          endpoint = `${apiUrl}/bulk/todos`;
+          throw new Error(`Unknown bulk action: ${action}`);
       }
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Bulk action failed');
-      }
-
-      const result = await response.json();
-      
-      // Use the updateBulkState function to properly update both todos and filteredTodos
-      updateBulkState(action, validTodoIds, data);
       
       // Clear selection after successful bulk action
       setSelectedTodos([]);
       
-      // Show success message
-      showToast(result.message || `${action.charAt(0).toUpperCase() + action.slice(1)} action completed successfully for ${validTodoIds.length} todo${validTodoIds.length !== 1 ? 's' : ''}`, 'success');
+      // Note: Success/error messages are handled by TodoProvider methods
     } catch (error) {
-      console.error('Bulk action error:', error);
-      showToast(error.message || `Failed to ${action} todos`, 'error');
+      // Note: Error messages are handled by TodoProvider methods
     }
   };
 
@@ -638,6 +741,30 @@ const Dashboard = () => {
       return;
     }
 
+    // If we're in edit mode, just mark the file for deletion without actually deleting it
+    if (editingTodo) {
+      setPendingFileDeletions(prev => new Set(prev).add(fileId));
+      
+      // Update the editing todo by removing the attachment from the UI
+      setEditingTodo(prev => ({
+        ...prev,
+        attachments: (prev.attachments || []).filter(att => att.id !== fileId),
+        file_count: Math.max(0, (prev.file_count || 0) - 1)
+      }));
+      
+      // Update the viewing todo by removing the attachment from the UI
+      if (viewingTodo && viewingTodo.id === editingTodo.id) {
+        setViewingTodo(prev => ({
+          ...prev,
+          attachments: (prev.attachments || []).filter(att => att.id !== fileId),
+          file_count: Math.max(0, (prev.file_count || 0) - 1)
+        }));
+      }
+      
+      return; // Exit early for edit mode
+    }
+
+    // For non-edit mode (view mode, create mode), delete immediately
     try {
       // Add file to deleting set
       setDeletingFiles(prev => new Set(prev).add(fileId));
@@ -656,9 +783,9 @@ const Dashboard = () => {
         throw new Error('Delete failed');
       }
 
-      // Update the editing todo by removing the deleted attachment
-      if (editingTodo) {
-        setEditingTodo(prev => ({
+      // Update the viewing todo by removing the deleted attachment
+      if (viewingTodo) {
+        setViewingTodo(prev => ({
           ...prev,
           attachments: (prev.attachments || []).filter(att => att.id !== fileId),
           file_count: Math.max(0, (prev.file_count || 0) - 1)
@@ -677,51 +804,20 @@ const Dashboard = () => {
         return newSet;
       });
     }
-  }, [editingTodo, deletingFiles, loadTodos]);
+  }, [editingTodo, viewingTodo, deletingFiles, loadTodos]);
 
   // Advanced search handlers
   const handleAdvancedSearch = useCallback(async (filters) => {
     try {
       setIsAdvancedSearching(true);
       setAdvancedFilters(filters);
-      
-      // Build query parameters
-      const params = new URLSearchParams();
-      
-      if (filters.search) params.append('search', filters.search);
-      if (filters.priorities?.length > 0) params.append('priorities', filters.priorities.join(','));
-      if (filters.categories?.length > 0) params.append('categories', filters.categories.join(','));
-      if (filters.status && filters.status !== 'all') params.append('status', filters.status);
-      if (filters.startDate) params.append('startDate', filters.startDate);
-      if (filters.endDate) params.append('endDate', filters.endDate);
-      if (filters.dueStartDate) params.append('dueStartDate', filters.dueStartDate);
-      if (filters.dueEndDate) params.append('dueEndDate', filters.dueEndDate);
-      if (filters.hasFiles && filters.hasFiles !== 'all') params.append('hasFiles', filters.hasFiles);
-      if (filters.sortBy) params.append('sortBy', filters.sortBy);
-      if (filters.sortDirection) params.append('sortDirection', filters.sortDirection);
-      
-      // Make API request
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-      const response = await fetch(`${apiUrl}/advanced/search?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Update todos with advanced search results
-        setTodos(data.todos || []);
-      } else {
-        throw new Error('Advanced search failed');
-      }
+      await advancedSearch(filters);
     } catch (error) {
       showToast('Error performing advanced search', 'error');
     } finally {
       setIsAdvancedSearching(false);
     }
-  }, [setTodos, showToast]);
+  }, [advancedSearch, showToast]);
 
   const handleAdvancedFilterChange = useCallback((filters) => {
     setAdvancedFilters(filters);
@@ -731,14 +827,14 @@ const Dashboard = () => {
 
   const clearAdvancedSearch = useCallback(() => {
     setAdvancedFilters({});
-    setShowAdvancedSearch(false);
+    setClearAdvancedSearchTrigger(prev => prev + 1);
     // Reload all todos
     loadTodos();
   }, [loadTodos]);
 
   return (
     <div className="p-6">
-      <div className="container mx-auto">
+      <div className="max-w-none mx-[36px]">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
@@ -750,41 +846,14 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+          {/* To Do */}
           <Card className="stats-card-glass transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Todos</p>
-                  <p className="text-2xl font-bold text-foreground">{Number(stats.total)}</p>
-                </div>
-                <div className="icon-bg bg-purple-100 dark:bg-purple-900/30">
-                  <ClipboardList className="icon-modern-lg text-purple-600 dark:text-purple-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold text-success-600">{Number(stats.completed)}</p>
-                </div>
-                <div className="icon-bg bg-green-100 dark:bg-green-900/30">
-                  <CheckCircle2 className="icon-modern-lg text-green-600 dark:text-green-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">In Progress</p>
-                  <p className="text-2xl font-bold text-warning-600">{Number(stats.pending)}</p>
+                  <p className="text-sm font-medium text-muted-foreground">To Do</p>
+                  <p className="text-2xl font-bold text-warning-600">{Number(stats?.pending || 0)}</p>
                 </div>
                 <div className="icon-bg bg-yellow-100 dark:bg-yellow-900/30">
                   <Circle className="icon-modern-lg text-yellow-600 dark:text-yellow-300" />
@@ -793,12 +862,58 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
+          {/* In Progress */}
+          <Card className="stats-card-glass transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">In Progress</p>
+                  <p className="text-2xl font-bold text-blue-600">{Number(stats?.in_progress || 0)}</p>
+                </div>
+                <div className="icon-bg bg-blue-100 dark:bg-blue-900/30">
+                  <Clock className="icon-modern-lg text-blue-600 dark:text-blue-300" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Completed */}
+          <Card className="stats-card-glass transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Completed</p>
+                  <p className="text-2xl font-bold text-success-600">{Number(stats?.completed || 0)}</p>
+                </div>
+                <div className="icon-bg bg-green-100 dark:bg-green-900/30">
+                  <CheckCircle2 className="icon-modern-lg text-green-600 dark:text-green-300" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Total */}
+          <Card className="stats-card-glass transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total</p>
+                  <p className="text-2xl font-bold text-foreground">{Number(stats?.total || 0)}</p>
+                </div>
+                <div className="icon-bg bg-purple-100 dark:bg-purple-900/30">
+                  <ClipboardList className="icon-modern-lg text-purple-600 dark:text-purple-300" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* High Priority */}
           <Card className="stats-card-glass transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">High Priority</p>
-                  <p className="text-2xl font-bold text-error-600">{Number(stats.high_priority)}</p>
+                  <p className="text-2xl font-bold text-error-600">{Number(stats?.high_priority || 0)}</p>
                 </div>
                 <div className="icon-bg bg-red-100 dark:bg-red-900/30">
                   <AlertTriangle className="icon-modern-lg text-red-600 dark:text-red-300" />
@@ -816,9 +931,9 @@ const Dashboard = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search todos..."
+                  placeholder="Search to dos..."
                   value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -828,13 +943,17 @@ const Dashboard = () => {
             <Button
               variant="outline"
               onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm ${
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm transition-all duration-300 ease-out ${
                 Object.keys(advancedFilters).length > 0 
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
-                  : ''
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
+                  : showAdvancedSearch
+                  ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 shadow-md'
+                  : 'hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-sm'
               }`}
             >
-              <Search className="h-4 w-4" />
+              <Search className={`h-4 w-4 transition-all duration-300 ease-out ${
+                showAdvancedSearch ? 'rotate-180 scale-110' : 'rotate-0 scale-100'
+              }`} />
               Advanced
               {Object.keys(advancedFilters).length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded-full">
@@ -858,34 +977,36 @@ const Dashboard = () => {
               className="flex items-center gap-2 px-3 py-1.5 text-sm"
             >
               <Plus className="h-4 w-4" />
-              New Todo
+              New To Do
             </Button>
             
             {/* View Mode Toggle - Icon Only */}
             <div className="flex items-center gap-1">
+              <Tooltip content="List mode" position="bottom" delay={100}>
               <button
                 onClick={() => setViewMode('list')}
-                className={`flex items-center justify-center w-10 h-10 rounded-md text-sm transition-colors ${
+                  className={`flex items-center justify-center w-10 h-10 rounded-md text-sm transition-colors ${
                   viewMode === 'list'
                     ? 'bg-blue-500 text-white'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
-                title="List View"
               >
-                <List className="w-5 h-5" />
+                  <List className="w-5 h-5" />
               </button>
+              </Tooltip>
               
+              <Tooltip content="Kanban Mode" position="bottom" delay={100}>
               <button
                 onClick={() => setViewMode('kanban')}
-                className={`flex items-center justify-center w-10 h-10 rounded-md text-sm transition-colors ${
+                  className={`flex items-center justify-center w-10 h-10 rounded-md text-sm transition-colors ${
                   viewMode === 'kanban'
                     ? 'bg-blue-500 text-white'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                 }`}
-                title="Kanban View"
               >
-                <Grid className="w-5 h-5" />
+                  <Grid className="w-5 h-5" />
               </button>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -896,66 +1017,54 @@ const Dashboard = () => {
           <Card className="mb-6">
             <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Priority</label>
-                  <select
+                <CustomSelect
+                  label="Priority"
                     value={filters.priority}
-                    onChange={(e) => handleFilterChange('priority', e.target.value)}
-                    className="w-full p-2 border border-input rounded-md bg-background"
-                  >
-                    <option value="all">All Priorities</option>
-                    {TODO_CONFIG.PRIORITIES.map(priority => (
-                      <option key={priority.value} value={priority.value}>
-                        {priority.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  onChange={(value) => handleFilterChange('priority', value)}
+                  options={[
+                    { value: 'all', label: 'All Priorities' },
+                    ...TODO_CONFIG.PRIORITIES
+                  ]}
+                  placeholder="Select Priority"
+                />
                 
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Category</label>
-                  <select
+                <CustomSelect
+                  label="Category"
                     value={filters.category}
-                    onChange={(e) => handleFilterChange('category', e.target.value)}
-                    className="w-full p-2 border border-input rounded-md bg-background"
-                  >
-                    <option value="all">All Categories</option>
-                    {TODO_CONFIG.CATEGORIES.map(category => (
-                      <option key={category.value} value={category.value}>
-                        {category.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  onChange={(value) => handleFilterChange('category', value)}
+                  options={[
+                    { value: 'all', label: 'All Categories' },
+                    ...TODO_CONFIG.CATEGORIES
+                  ]}
+                  placeholder="Select Category"
+                />
                 
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Status</label>
-                  <select
-                    value={filters.completed}
-                    onChange={(e) => handleFilterChange('completed', e.target.value)}
-                    className="w-full p-2 border border-input rounded-md bg-background"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="pending">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
+                <CustomSelect
+                  label="Status"
+                  value={filters.status}
+                  onChange={(value) => handleFilterChange('status', value)}
+                  options={[
+                    { value: 'all', label: 'All Status' },
+                    { value: 'pending', label: 'To Do' },
+                    { value: 'in_progress', label: 'In Progress' },
+                    { value: 'completed', label: 'Completed' }
+                  ]}
+                  placeholder="Select Status"
+                />
                 
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Due Date</label>
-                  <select
+                <CustomSelect
+                  label="Due Date"
                     value={filters.dueDate}
-                    onChange={(e) => handleFilterChange('dueDate', e.target.value)}
-                    className="w-full p-2 border border-input rounded-md bg-background"
-                  >
-                    <option value="all">All Dates</option>
-                    <option value="today">Today</option>
-                    <option value="tomorrow">Tomorrow</option>
-                    <option value="this_week">This Week</option>
-                    <option value="overdue">Overdue</option>
-                    <option value="no_date">No Date</option>
-                  </select>
-                </div>
+                  onChange={(value) => handleFilterChange('dueDate', value)}
+                  options={[
+                    { value: 'all', label: 'All Dates' },
+                    { value: 'today', label: 'Today' },
+                    { value: 'tomorrow', label: 'Tomorrow' },
+                    { value: 'this_week', label: 'This Week' },
+                    { value: 'overdue', label: 'Overdue' }
+                  ]}
+                  placeholder="Select Date"
+                />
               </div>
               
               <div className="flex justify-end mt-4">
@@ -1002,16 +1111,30 @@ const Dashboard = () => {
                 className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border transition-colors text-sm ${
                   filteredTodos.length === 0
                     ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                    : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 hover:bg-slate-100 dark:hover:bg-slate-900/30 text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                 }`}
               >
                 <CheckSquare className="w-4 h-4" />
                 <span className="font-medium">
                   {(() => {
-                    const selectableTodos = filteredTodos.filter(todo => !todo.completed && todo.state !== 'complete');
+                    const selectableTodos = filteredTodos.filter(todo => todo.status !== 'completed');
                     return selectableTodos.length > 0 && selectedTodos.length === selectableTodos.length ? 'Deselect All' : 'Select All';
                   })()}
                 </span>
+              </button>
+
+              {/* In Progress */}
+              <button
+                onClick={() => handleBulkAction('in-progress')}
+                disabled={selectedTodos.length === 0}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border transition-colors text-sm ${
+                  selectedTodos.length === 0
+                    ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                    : 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span className="font-medium">In Progress</span>
               </button>
 
               {/* Complete */}
@@ -1028,20 +1151,6 @@ const Dashboard = () => {
                 <span className="font-medium">Complete</span>
               </button>
 
-              {/* In Progress */}
-              <button
-                onClick={() => handleBulkAction('in-progress')}
-                disabled={selectedTodos.length === 0}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border transition-colors text-sm ${
-                  selectedTodos.length === 0
-                    ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                    : 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300'
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                <span className="font-medium">In Progress</span>
-              </button>
-
               {/* Priority */}
               <button
                 onClick={() => setShowPriorityModal(true)}
@@ -1049,7 +1158,7 @@ const Dashboard = () => {
                 className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg border transition-colors text-sm ${
                   selectedTodos.length === 0
                     ? 'border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                    : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                    : 'border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300'
                 }`}
               >
                 <Flag className="w-4 h-4" />
@@ -1112,8 +1221,16 @@ const Dashboard = () => {
         </Card>
 
         {/* Advanced Search Panel */}
-        {showAdvancedSearch && (
-          <Card className="mb-6 border-0 shadow-xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+        <div className={`mb-6 transition-all duration-500 ease-out ${
+          showAdvancedSearch 
+            ? 'max-h-[1000px] opacity-100 translate-y-0 overflow-visible' 
+            : 'max-h-0 opacity-0 -translate-y-4 overflow-hidden'
+        }`}>
+          <Card className="border-0 shadow-xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 transform transition-all duration-500 ease-out ${
+            showAdvancedSearch 
+              ? 'scale-100 translate-y-0' 
+              : 'scale-95 translate-y-2'
+          }">
             <CardContent className="p-0">
               <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 rounded-t-lg">
                 <div className="flex items-center justify-between">
@@ -1143,6 +1260,15 @@ const Dashboard = () => {
                         Clear Search
                       </Button>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAdvancedSearch(false)}
+                      className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30 backdrop-blur-sm"
+                      title="Close Advanced Search"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1150,6 +1276,7 @@ const Dashboard = () => {
                 <AdvancedSearch
                   onSearch={handleAdvancedSearch}
                   onFilterChange={handleAdvancedFilterChange}
+                  clearTrigger={clearAdvancedSearchTrigger}
                   filterOptions={{
                     priorities: ['low', 'medium', 'high'],
                     categories: TODO_CONFIG.CATEGORIES.map(c => c.value),
@@ -1166,13 +1293,13 @@ const Dashboard = () => {
               </div>
             </CardContent>
           </Card>
-        )}
+        </div>
 
 
         {/* New Todo Modal */}
         {showNewTodo && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={handleCancelTodo}>
-            <Card className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <Card className="w-full max-w-xl max-h-[85vh] overflow-y-auto overflow-x-visible" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>{editingTodo ? 'Edit Todo' : 'New Todo'}</CardTitle>
                 <CardDescription>
@@ -1181,8 +1308,9 @@ const Dashboard = () => {
               </CardHeader>
               
               <CardContent>
-                <div className="max-h-[70vh] overflow-y-auto pr-2 scrollbar-thin">
-                  <form onSubmit={editingTodo ? handleUpdateTodo : handleCreateTodo} className="space-y-4">
+                <div className="max-h-[70vh] overflow-y-auto overflow-x-visible pr-2 scrollbar-thin">
+                  <form onSubmit={editingTodo ? handleUpdateTodo : handleCreateTodo} className="space-y-4 relative">
+                    <div>
                     <Input
                       label={
                         <span>
@@ -1190,18 +1318,39 @@ const Dashboard = () => {
                         </span>
                       }
                       placeholder="What needs to be done?"
-                      value={newTodo.title}
-                      onChange={(e) => setNewTodo({ ...newTodo, title: e.target.value })}
+                      value={editingTodo ? editingTodo.title : newTodo.title}
+                      onChange={(e) => {
+                        if (editingTodo) {
+                          setEditingTodo({ ...editingTodo, title: e.target.value });
+                        } else {
+                          setNewTodo({ ...newTodo, title: e.target.value });
+                        }
+                      }}
+                        maxLength={75}
                       required
                     />
+                      <div className={`text-xs mt-1 text-right ${
+                        (editingTodo ? editingTodo.title : newTodo.title).length > 70 ? 'text-red-500' : 
+                        (editingTodo ? editingTodo.title : newTodo.title).length > 60 ? 'text-yellow-500' : 
+                        'text-gray-500'
+                      }`}>
+                        {(editingTodo ? editingTodo.title : newTodo.title).length}/75
+                      </div>
+                    </div>
                     
                     <div>
                       <label className="text-sm font-medium mb-2 block">Description</label>
-                      <textarea
+                      <RichTextEditor
                         placeholder="Add details..."
-                        value={newTodo.description}
-                        onChange={(e) => setNewTodo({ ...newTodo, description: e.target.value })}
-                        className="w-full p-2 border border-input rounded-md bg-background min-h-[80px] resize-none"
+                        value={editingTodo ? editingTodo.description : newTodo.description}
+                        onChange={(value) => {
+                          if (editingTodo) {
+                            setEditingTodo({ ...editingTodo, description: value });
+                          } else {
+                            setNewTodo({ ...newTodo, description: value });
+                          }
+                        }}
+                        height="120px"
                       />
                     </div>
                     
@@ -1212,16 +1361,28 @@ const Dashboard = () => {
                             Priority <span className="text-red-500">*</span>
                           </span>
                         }
-                        value={newTodo.priority}
-                        onChange={(value) => setNewTodo({ ...newTodo, priority: value })}
+                        value={editingTodo ? editingTodo.priority : newTodo.priority}
+                        onChange={(value) => {
+                          if (editingTodo) {
+                            setEditingTodo({ ...editingTodo, priority: value });
+                          } else {
+                            setNewTodo({ ...newTodo, priority: value });
+                          }
+                        }}
                         options={TODO_CONFIG.PRIORITIES}
                         placeholder="Select priority"
                       />
                       
                       <CustomSelect
                         label="Category"
-                        value={newTodo.category}
-                        onChange={(value) => setNewTodo({ ...newTodo, category: value })}
+                        value={editingTodo ? editingTodo.category : newTodo.category}
+                        onChange={(value) => {
+                          if (editingTodo) {
+                            setEditingTodo({ ...editingTodo, category: value });
+                          } else {
+                            setNewTodo({ ...newTodo, category: value });
+                          }
+                        }}
                         options={[
                           { value: '', label: 'Select category' },
                           ...TODO_CONFIG.CATEGORIES
@@ -1235,8 +1396,14 @@ const Dashboard = () => {
                         Due Date <span className="text-red-500">*</span>
                       </label>
                       <DatePicker
-                        value={newTodo.due_date}
-                        onChange={(date) => setNewTodo({ ...newTodo, due_date: date })}
+                        value={editingTodo ? editingTodo.due_date : newTodo.due_date}
+                        onChange={(date) => {
+                          if (editingTodo) {
+                            setEditingTodo({ ...editingTodo, due_date: date });
+                          } else {
+                            setNewTodo({ ...newTodo, due_date: date });
+                          }
+                        }}
                         placeholder="Select due date"
                         minDate={getTodayInUserTimezone()}
                       />
@@ -1247,7 +1414,7 @@ const Dashboard = () => {
                       <label className="text-sm font-medium mb-2 block">Attachments</label>
                       <FileUpload
                         ref={fileUploadRef}
-                        todoId={editingTodo?.id}
+                        todoId={editingTodo?.id || createdTodoId}
                         onFilesChange={handleFilesChange}
                         onDelete={handleFileDelete}
                         multiple={true}
@@ -1255,6 +1422,7 @@ const Dashboard = () => {
                         className="mb-4"
                         existingAttachments={editingTodo?.attachments || []}
                         deletingFiles={deletingFiles}
+                        suppressCancellationError={isUserCancelling}
                       />
                     </div>
                     
@@ -1296,7 +1464,7 @@ const Dashboard = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleFilterChange('search', '')}
+                  onClick={() => handleSearchChange('')}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   Clear search
@@ -1319,18 +1487,18 @@ const Dashboard = () => {
               key="kanban-view"
               className="animate-in fade-in-0 slide-in-from-bottom-4 duration-300"
             >
-              <KanbanBoard
-                key={`kanban-${filteredTodos.length}-${filteredTodos.map(t => `${t.id}-${t.state}`).join(',')}`}
-                todos={filteredTodos}
-                onEdit={handleEditTodo}
-                onDelete={handleDeleteTodo}
-                onToggleComplete={handleToggleComplete}
-                onFileClick={handleFileClick}
-                onMoveTodo={handleMoveTodo}
+            <KanbanBoard
+              key={`kanban-${filteredTodos.length}-${filteredTodos.map(t => `${t.id}-${t.state}`).join(',')}`}
+              todos={filteredTodos}
+              onEdit={handleEditTodo}
+              onDelete={handleDeleteTodo}
+              onToggleComplete={handleToggleComplete}
+              onFileClick={handleFileClick}
+              onMoveTodo={handleMoveTodo}
                 onViewTodo={handleViewTodo}
                 selectedTodos={selectedTodos}
                 onSelectTodo={handleSelectTodo}
-              />
+            />
             </div>
           ) : filteredTodos.length === 0 ? (
             <Card>
@@ -1344,12 +1512,12 @@ const Dashboard = () => {
                         <p className="text-muted-foreground mb-4">
                           {filters.search
                             ? `No todos match your search for "${filters.search}". Try a different search term.`
-                            : filters.priority !== 'all' || filters.category !== 'all' || filters.completed !== 'all' || filters.dueDate !== 'all'
+                            : filters.priority !== 'all' || filters.category !== 'all' || filters.status !== 'all' || filters.dueDate !== 'all'
                               ? 'Try adjusting your filters to see more todos'
                               : 'Get started by creating your first todo'
                           }
                         </p>
-                        {!filters.search && filters.priority === 'all' && filters.category === 'all' && filters.completed === 'all' && filters.dueDate === 'all' && (
+                        {!filters.search && filters.priority === 'all' && filters.category === 'all' && filters.status === 'all' && filters.dueDate === 'all' && (
                           <Button onClick={() => setShowNewTodo(true)}>
                             <Plus className="icon-modern-sm mr-2" />
                             Create Todo
@@ -1362,182 +1530,24 @@ const Dashboard = () => {
               key="list-view"
               className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-300"
             >
-              {filteredTodos.map((todo) => {
-                const dueDateInfo = getDueDateInfo(todo.due_date);
-                
-                return (
-                <Card key={todo.id} className={`hover:shadow-lg transition-all duration-200 group cursor-pointer ${
-                  selectedTodos.includes(todo.id) ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/10' : ''
-                }`} onClick={() => handleViewTodo(todo)}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3 flex-1">
-                        {/* Bulk selection checkbox */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectTodo(todo.id);
-                          }}
-                          disabled={todo.completed || todo.state === 'complete'}
-                          className={cn(
-                            "mt-1 p-1 rounded transition-colors",
-                            (todo.completed || todo.state === 'complete')
-                              ? "cursor-not-allowed opacity-50"
-                              : "hover:bg-gray-100 dark:hover:bg-gray-700"
-                          )}
-                          title={
-                            (todo.completed || todo.state === 'complete')
-                              ? "Cannot select completed todos"
-                              : "Select for bulk actions"
-                          }
-                        >
-                          {selectedTodos.includes(todo.id) ? (
-                            <CheckSquare className="w-5 h-5 text-blue-600" />
-                          ) : (
-                            <Square className={cn(
-                              "w-5 h-5",
-                              (todo.completed || todo.state === 'complete')
-                                ? "text-gray-300"
-                                : "text-gray-400"
-                            )} />
-                          )}
-                        </button>
-                        
-                        {/* Todo completion toggle */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!todo.completed) handleToggleTodo(todo.id);
-                          }}
-                          disabled={todo.completed}
-                          className={cn(
-                            "mt-1 icon-button transition-all duration-200",
-                            todo.completed 
-                              ? "cursor-not-allowed opacity-60" 
-                              : "hover:scale-110"
-                          )}
-                          title={todo.completed ? "Cannot unmark completed todo" : "Mark as complete"}
-                        >
-                          {todo.completed ? (
-                            <CheckCircle2 className="icon-modern-md text-success-600" />
-                          ) : (
-                            <Circle className="icon-modern-md text-muted-foreground hover:text-foreground" />
-                          )}
-                        </button>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className={cn(
-                              "text-lg font-medium",
-                              todo.completed && "line-through text-muted-foreground"
-                            )}>
-                              {todo.title}
-                            </h3>
-                            <PriorityBadge priority={todo.priority} size="sm" />
-                            <Badge 
-                              variant="outline" 
-                              size="sm"
-                              className={getStateBadgeInfo(todo.state).className}
-                            >
-                              {getStateBadgeInfo(todo.state).label}
-                            </Badge>
-                            {todo.category && (
-                              <Badge variant="outline" size="sm">
-                                {TODO_CONFIG.CATEGORIES.find(c => c.value === todo.category)?.label || todo.category}
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          {todo.description && (
-                            <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                              {todo.description}
-                            </p>
-                          )}
-                          
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            {todo.due_date && (
-                              <div className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                <span className={dueDateInfo.className}>
-                                  {dueDateInfo.text}
-                                </span>
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              <span>
-                                {getActionTimeInfo(todo).label} {formatRelativeTime(getActionTimeInfo(todo).time)}
-                              </span>
-                            </div>
-                            
-                            {todo.file_count > 0 && (
-                              <div className="flex items-center gap-1">
-                                <File className="h-4 w-4" />
-                                <span>
-                                  {todo.file_count} file{todo.file_count > 1 ? 's' : ''}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* File Attachments Preview */}
-                          {todo.attachments && todo.attachments.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                              <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
-                                Attachments:
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {todo.attachments.slice(0, 3).map((attachment) => (
-                                  <FileAttachment
-                                    key={attachment.id}
-                                    attachment={attachment}
-                                    onDelete={handleFileDelete}
-                                    size="small"
-                                    showActions={true}
-                                    isDeleting={deletingFiles.has(attachment.id)}
+              {filteredTodos.map((todo) => (
+                <TodoListItem
+                  key={todo.id}
+                  todo={todo}
+                  selectedTodos={selectedTodos}
+                  deletingFiles={deletingFiles}
+                  onSelectTodo={handleSelectTodo}
+                  onToggleComplete={handleToggleTodo}
+                  onEdit={handleEditTodo}
+                  onDelete={handleDeleteTodo}
+                  onViewTodo={handleViewTodo}
+                  onFileDelete={handleFileDelete}
+                  getDueDateInfo={getDueDateInfo}
+                  getStatusBadgeInfo={getStatusBadgeInfo}
+                  getActionTimeInfo={getActionTimeInfo}
                                   />
                                 ))}
-                                {todo.attachments.length > 3 && (
-                                  <div className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs text-gray-600 dark:text-gray-400">
-                                    +{todo.attachments.length - 3} more
-                                  </div>
-                                )}
-                              </div>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditTodo(todo);
-                          }}
-                        >
-                          <Edit className="icon-modern-sm" />
-                        </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteTodo(todo);
-                                }}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="icon-modern-sm" />
-                              </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            </div>
           )}
         </div>
       </div>
@@ -1547,7 +1557,7 @@ const Dashboard = () => {
         isOpen={deleteConfirm.isOpen}
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
-        title="Delete Todo"
+        title="Delete To Do"
         message={`Are you sure you want to delete "${deleteConfirm.todo?.title}"? This action cannot be undone.`}
         confirmText="Delete"
         cancelText="Cancel"
@@ -1590,13 +1600,13 @@ const Dashboard = () => {
               Set Category for {selectedTodos.length} todo{selectedTodos.length !== 1 ? 's' : ''}
             </h3>
             <div className="space-y-2">
-              {['work', 'personal', 'shopping', 'health', 'finance', 'education', 'travel', 'other'].map(category => (
+              {TODO_CONFIG.CATEGORIES.map(category => (
                 <button
-                  key={category}
-                  onClick={() => handleCategoryChange(category)}
-                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors capitalize"
+                  key={category.value}
+                  onClick={() => handleCategoryChange(category.value)}
+                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  {category}
+                  {category.label}
                 </button>
               ))}
             </div>
@@ -1613,23 +1623,21 @@ const Dashboard = () => {
       {/* Todo Detail Modal */}
       {viewingTodo && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={handleCloseViewTodo}>
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <CardHeader className="border-b border-gray-200 dark:border-gray-700">
+          <Card className="w-full max-w-3xl max-h-[95vh] overflow-y-auto overflow-x-visible" onClick={(e) => e.stopPropagation()}>
+            <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2.5 px-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <PriorityBadge priority={viewingTodo.priority} size="sm" />
                     <Badge 
                       variant="outline" 
                       size="sm"
-                      className={getStateBadgeInfo(viewingTodo.state).className}
+                      className={getStatusBadgeInfo(viewingTodo.status).className}
                     >
-                      {getStateBadgeInfo(viewingTodo.state).label}
+                      {getStatusBadgeInfo(viewingTodo.status).label}
                     </Badge>
                     {viewingTodo.category && (
-                      <Badge variant="outline" size="sm">
-                        {TODO_CONFIG.CATEGORIES.find(c => c.value === viewingTodo.category)?.label || viewingTodo.category}
-                      </Badge>
+                      <CategoryBadge category={viewingTodo.category} size="sm" />
                     )}
                   </div>
                 </div>
@@ -1666,16 +1674,17 @@ const Dashboard = () => {
               </div>
             </CardHeader>
             
-            <CardContent className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <CardContent className="p-6 overflow-y-auto overflow-x-visible max-h-[calc(90vh-120px)]">
               <div className="space-y-6">
                 <div>
                   <h2 className="text-2xl font-bold text-foreground mb-2">
                     {viewingTodo.title}
                   </h2>
                   {viewingTodo.description && (
-                    <p className="text-muted-foreground leading-relaxed">
-                      {viewingTodo.description}
-                    </p>
+                    <div 
+                      className="text-muted-foreground leading-relaxed prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: viewingTodo.description }}
+                    />
                   )}
                 </div>
 
@@ -1685,8 +1694,8 @@ const Dashboard = () => {
                       <h3 className="text-sm font-medium text-muted-foreground mb-2">Due Date</h3>
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className={getDueDateInfo(viewingTodo.due_date).className}>
-                          {viewingTodo.due_date ? getDueDateInfo(viewingTodo.due_date).text : 'No due date'}
+                        <span className={getDueDateBadgeInfo(viewingTodo.due_date, viewingTodo.status).className}>
+                          {viewingTodo.due_date ? getDueDateBadgeInfo(viewingTodo.due_date, viewingTodo.status).text : 'No due date'}
                         </span>
                       </div>
                     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
@@ -8,18 +8,19 @@ import { Input } from '../components/common/Input';
 import { Eye, EyeOff, Mail, Lock, Sun, Moon, CheckCircle } from 'lucide-react';
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
   const { login, isAuthenticated, error, clearError } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    rememberMe: false,
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -32,7 +33,15 @@ const Login = () => {
   // Clear errors when component mounts
   useEffect(() => {
     clearError();
-  }, [clearError]);
+    
+    // Only set email from location state if provided (e.g., from registration)
+    if (location.state?.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: location.state.email
+      }));
+    }
+  }, [clearError, location.state?.email]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -80,9 +89,10 @@ const Login = () => {
       const result = await login(formData);
       if (result.success) {
         // Navigation will be handled by useEffect
+        // Browser will handle credential saving based on autocomplete attributes
       }
     } catch (error) {
-      console.error('Login error:', error);
+      // Error handling is done by the login method
     } finally {
       setIsSubmitting(false);
     }
@@ -92,6 +102,7 @@ const Login = () => {
     setFormData({
       email: 'demo@todoapp.com',
       password: 'Demo123!',
+      rememberMe: false,
     });
     
     setIsSubmitting(true);
@@ -100,9 +111,10 @@ const Login = () => {
       await login({
         email: 'demo@todoapp.com',
         password: 'Demo123!',
+        rememberMe: false,
       });
     } catch (error) {
-      console.error('Demo login error:', error);
+      // Error handling is done by the login method
     } finally {
       setIsSubmitting(false);
     }
@@ -110,8 +122,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-grid opacity-5" />
       
       {/* Theme Toggle */}
       <Button
@@ -162,6 +172,7 @@ const Login = () => {
                 leftIcon={<Mail className="h-4 w-4" />}
                 disabled={isSubmitting}
                 className="transition-all duration-200"
+                autoComplete="username"
               />
 
               {/* Password Field */}
@@ -189,7 +200,37 @@ const Login = () => {
                 }
                 disabled={isSubmitting}
                 className="transition-all duration-200"
+                autoComplete="current-password"
               />
+
+              {/* Remember Me Checkbox */}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    rememberMe: e.target.checked
+                  }))}
+                  disabled={isSubmitting}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded transition-colors"
+                />
+                <label 
+                  htmlFor="rememberMe" 
+                  className="text-sm text-muted-foreground cursor-pointer select-none"
+                >
+                  Remember me
+                </label>
+              </div>
+
+              {/* Success Message from Registration */}
+              {location.state?.message && (
+                <div className="p-3 text-sm text-green-700 bg-green-50 border border-green-200 rounded-md dark:text-green-400 dark:bg-green-900/20 dark:border-green-800">
+                  {location.state.message}
+                </div>
+              )}
 
               {/* Error Message */}
               {error && (

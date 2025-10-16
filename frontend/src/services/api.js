@@ -15,7 +15,8 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    // Check both localStorage and sessionStorage for token
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -38,7 +39,8 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        // Check both localStorage and sessionStorage for refresh token
+        const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
         if (refreshToken) {
           const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
             refreshToken,
@@ -46,8 +48,16 @@ api.interceptors.response.use(
 
           if (response.data.success) {
             const { token, refreshToken: newRefreshToken } = response.data.data;
-            localStorage.setItem('token', token);
-            localStorage.setItem('refreshToken', newRefreshToken);
+            
+            // Determine which storage to use based on where the original token was stored
+            const wasInLocalStorage = localStorage.getItem('refreshToken');
+            if (wasInLocalStorage) {
+              localStorage.setItem('token', token);
+              localStorage.setItem('refreshToken', newRefreshToken);
+            } else {
+              sessionStorage.setItem('token', token);
+              sessionStorage.setItem('refreshToken', newRefreshToken);
+            }
             
             // Retry original request with new token
             originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -148,6 +158,16 @@ export const todosAPI = {
     }
   },
 
+  // Advanced search todos
+  advancedSearch: async (params = {}) => {
+    try {
+      const response = await api.get('/advanced/search', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // Get specific todo
   getTodo: async (id) => {
     try {
@@ -216,12 +236,58 @@ export const todosAPI = {
   },
 
   // Bulk operations
-  bulkOperation: async (operation, todoIds, data = {}) => {
+  bulkUpdate: async (todoIds, updates) => {
     try {
-      const response = await api.post('/todos/bulk', {
-        operation,
+      const response = await api.patch('/bulk/todos', {
         todoIds,
-        updateData: data,
+        updates,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  bulkUpdateState: async (todoIds, state) => {
+    try {
+      const response = await api.patch('/bulk/todos/state', {
+        todoIds,
+        state,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  bulkUpdatePriority: async (todoIds, priority) => {
+    try {
+      const response = await api.patch('/bulk/todos/priority', {
+        todoIds,
+        priority,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  bulkUpdateCategory: async (todoIds, category) => {
+    try {
+      const response = await api.patch('/bulk/todos/category', {
+        todoIds,
+        category,
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  bulkDelete: async (todoIds) => {
+    try {
+      const response = await api.delete('/bulk/todos', {
+        data: { todoIds },
       });
       return response.data;
     } catch (error) {

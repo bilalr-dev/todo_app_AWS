@@ -98,7 +98,7 @@ describe('FileProcessor', () => {
 
     test('should handle multiple dots in filename', () => {
       expect(fileProcessor.getFileExtension('backup.tar.gz')).toBe('.gz');
-      expect(fileProcessor.getFileExtension('archive.2024.01.01.zip')).toBe('.zip');
+      expect(fileProcessor.getFileExtension('archive.2025.10.01.zip')).toBe('.zip');
     });
   });
 
@@ -188,8 +188,8 @@ describe('FileProcessor', () => {
     test('should get file information', async () => {
       const mockStats = {
         size: 1024,
-        birthtime: new Date('2024-01-01'),
-        mtime: new Date('2024-01-02')
+        birthtime: new Date('2025-10-01'),
+        mtime: new Date('2025-10-02')
       };
 
       fs.stat.mockResolvedValue(mockStats);

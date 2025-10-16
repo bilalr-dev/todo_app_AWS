@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
@@ -112,7 +112,7 @@ const Register = () => {
         navigate('/dashboard', { replace: true });
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      // Error handling is done by the register method
     } finally {
       setIsSubmitting(false);
     }

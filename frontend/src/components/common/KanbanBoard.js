@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   DndContext,
   DragOverlay,
-  closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -18,54 +18,25 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Badge, PriorityBadge } from './Badge';
+import { PriorityBadge, CategoryBadge } from './Badge';
 import { 
-  CheckCircle2, 
-  Circle, 
   Edit, 
   Trash2, 
   File,
-  Calendar,
-  Clock,
-  GripVertical,
   CheckSquare,
   Square
 } from 'lucide-react';
-import { cn, formatRelativeTime, formatDate, isToday, isTomorrow, isOverdue } from '../../utils/helpers';
+import { cn, formatDate, isToday, isTomorrow, isOverdue } from '../../utils/helpers';
+import { TODO_COLOR_CLASSES, getDueDateBadgeClass } from '../../utils/colors';
 
-// Helper function to get action time info
-const getActionTimeInfo = (todo) => {
-  const { state, created_at, updated_at, completed, started_at, completed_at } = todo;
-  
-  // For completed todos, show when they were completed (completed_at or updated_at as fallback)
-  if (state === 'complete' || completed) {
-    return {
-      label: 'Completed at:',
-      time: completed_at || updated_at
-    };
-  }
-  
-  // For in-progress todos, show when they were moved to in-progress (started_at or updated_at as fallback)
-  if (state === 'inProgress') {
-    return {
-      label: 'Started at:',
-      time: started_at || updated_at
-    };
-  }
-  
-  // For todo state, show when they were created
-  return {
-    label: 'Created at:',
-    time: created_at
-  };
-};
+
 
 // Helper function to get due date info (same as Dashboard)
 const getDueDateInfo = (dueDate) => {
   if (!dueDate) return { text: 'No due date', className: 'text-muted-foreground' };
   
   if (isOverdue(dueDate)) {
-    return { text: 'Overdue', className: 'text-red-600 font-medium' };
+    return { text: 'Overdue', className: 'text-red-600 font-bold bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-md' };
   }
   
   if (isToday(dueDate)) {
@@ -95,10 +66,6 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
     transition,
   };
 
-  const handleToggleComplete = (e) => {
-    e.stopPropagation();
-    onToggleComplete(todo.id);
-  };
 
   const handleEdit = (e) => {
     e.stopPropagation();
@@ -116,149 +83,160 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
       style={style}
       {...attributes}
       className={cn(
-        "group relative bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 transition-all duration-200 hover:shadow-lg hover:border-gray-300 dark:hover:border-gray-600 cursor-pointer",
-        isDragging && "opacity-50 shadow-xl scale-105 rotate-2",
-        todo.completed && "opacity-75",
+        "group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all duration-200 hover:shadow-lg cursor-pointer",
+        isDragging && "opacity-50 shadow-xl scale-105 rotate-1 cursor-move",
+        // Overdue styling (highest priority) - left border only
+        isOverdue(todo.due_date) && `border-l-4 ${TODO_COLOR_CLASSES.OVERDUE_BORDER} ${TODO_COLOR_CLASSES.OVERDUE_BG}`,
+        // Status-based styling (only if not overdue) - left border only
+        !isOverdue(todo.due_date) && todo.status === 'completed' && `border-l-4 ${TODO_COLOR_CLASSES.COMPLETED_BORDER} ${TODO_COLOR_CLASSES.COMPLETED_BG} opacity-75`,
+        !isOverdue(todo.due_date) && todo.status === 'in_progress' && `border-l-4 ${TODO_COLOR_CLASSES.IN_PROGRESS_BORDER} ${TODO_COLOR_CLASSES.IN_PROGRESS_BG}`,
+        !isOverdue(todo.due_date) && todo.status === 'pending' && `border-l-4 ${TODO_COLOR_CLASSES.TODO_BORDER} ${TODO_COLOR_CLASSES.TODO_BG}`,
+        // Selection styling
         selectedTodos.includes(todo.id) && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/10"
       )}
       onClick={() => onViewTodo && onViewTodo(todo)}
     >
-      {/* Todo content */}
-      <div className="pr-20 pl-12">
-        <div className="flex items-start space-x-3">
-          {/* Bulk selection checkbox */}
-          {onSelectTodo && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectTodo(todo.id);
-              }}
-              disabled={todo.completed || todo.state === 'complete'}
-              className={cn(
-                "mt-1 transition-colors",
-                (todo.completed || todo.state === 'complete')
-                  ? "text-gray-300 cursor-not-allowed opacity-50" 
-                  : "text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
-              )}
-              title={(todo.completed || todo.state === 'complete') ? "Cannot select completed todos" : "Select for bulk operations"}
-            >
-              {selectedTodos.includes(todo.id) ? (
-                <CheckSquare className="w-5 h-5 text-blue-500" />
-              ) : (
-                <Square className="w-5 h-5" />
-              )}
-            </button>
-          )}
-          
-          <button
-            onClick={(e) => !todo.completed && handleToggleComplete(e)}
-            disabled={todo.completed}
-            className={cn(
-              "mt-1 transition-colors",
-              todo.completed 
-                ? "text-gray-400 cursor-not-allowed opacity-60" 
-                : "text-gray-400 hover:text-green-500 dark:text-gray-500 dark:hover:text-green-400"
-            )}
-            title={todo.completed ? "Cannot unmark completed todo" : "Mark as complete"}
-          >
-            {todo.completed ? (
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
-            ) : (
-              <Circle className="w-5 h-5" />
-            )}
-          </button>
-          
-          <div className="flex-1 min-w-0">
+      {/* Drag handle */}
+      <div 
+        {...listeners}
+        className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-move p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600"
+        title="Drag to move"
+      >
+        <svg className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+        </svg>
+      </div>
+      <div className="p-4">
+        {/* Header with title */}
+        <div className="mb-3">
             <h3 className={cn(
-              "font-medium text-gray-900 dark:text-gray-100 mb-1",
-              todo.completed && "line-through text-gray-500 dark:text-gray-400"
+            "text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight",
+            todo.status === 'completed' && "line-through text-gray-500 dark:text-gray-400"
             )}>
               {todo.title}
             </h3>
+        </div>
             
+        {/* Description */}
             {todo.description && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
-                {todo.description}
-              </p>
+          <div 
+            className="text-xs text-gray-600 dark:text-gray-400 mb-3 leading-relaxed line-clamp-2 prose prose-xs max-w-none"
+            dangerouslySetInnerHTML={{ __html: todo.description }}
+          />
             )}
 
-            {/* Category and Priority */}
-            <div className="flex items-center gap-2 mb-2">
-              {todo.category && (
-                <Badge variant="secondary" size="sm">
-                  {todo.category}
-                </Badge>
-              )}
-              <PriorityBadge priority={todo.priority} size="sm" />
-            </div>
 
-
-            {/* Due date */}
-            {todo.due_date && (
-              <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
-                <Calendar className="w-3 h-3" />
-                <span className={getDueDateInfo(todo.due_date).className}>
-                  {getDueDateInfo(todo.due_date).text}
+        {/* Footer with badges and metadata */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {/* Bulk selection checkbox */}
+            {onSelectTodo && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectTodo(todo.id);
+                }}
+                disabled={todo.status === 'completed'}
+                className={cn(
+                  "transition-colors",
+                  todo.status === 'completed'
+                    ? "text-gray-300 cursor-not-allowed opacity-50" 
+                    : "text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+                )}
+                title={todo.status === 'completed' ? "Cannot select completed to dos" : "Select for bulk operations"}
+              >
+                {selectedTodos.includes(todo.id) ? (
+                  <CheckSquare className="w-4 h-4 text-blue-500" />
+                ) : (
+                  <Square className="w-4 h-4" />
+                )}
+              </button>
+            )}
+            
+            {/* Badges - different layout for completed vs active todos */}
+            {todo.status === 'completed' ? (
+              // Simplified layout for completed todos
+              <div className="flex items-center gap-2">
+                {todo.category && (
+                  <CategoryBadge category={todo.category} size="sm" />
+                )}
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                  Completed at: {formatDate(todo.completed_at)}
                 </span>
               </div>
-            )}
-
-            {/* Action time */}
-            <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
-              <Clock className="w-3 h-3" />
-              <span>
-                {getActionTimeInfo(todo).label} {formatRelativeTime(getActionTimeInfo(todo).time)}
-              </span>
-            </div>
-
-            {/* File attachments */}
-            {todo.file_count > 0 && (
-              <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
-                <File className="w-3 h-3" />
-                <span>{todo.file_count} file{todo.file_count !== 1 ? 's' : ''}</span>
+            ) : (
+              // Full layout for active todos
+              <div className="flex items-center gap-2">
+                {todo.category && (
+                  <CategoryBadge category={todo.category} size="sm" />
+                )}
+                <PriorityBadge priority={todo.priority} size="sm" />
+                {/* Status badge */}
+                <span className={cn(
+                  "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+                  todo.status === 'in_progress'
+                    ? TODO_COLOR_CLASSES.IN_PROGRESS_BADGE
+                    : TODO_COLOR_CLASSES.TODO_BADGE
+                )}>
+                  {todo.status === 'in_progress' ? 'In Progress' : 'To Do'}
+                </span>
+                {todo.due_date && (
+                  <span className={cn(
+                    "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
+                    getDueDateBadgeClass(todo.due_date)
+                  )}>
+                    {isOverdue(todo.due_date) 
+                      ? "Overdue"
+                      : getDueDateInfo(todo.due_date).text
+                    }
+                  </span>
+                )}
               </div>
             )}
           </div>
+
+          {/* File count */}
+            {todo.file_count > 0 && (
+              <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
+                <File className="w-3 h-3" />
+              <span>{todo.file_count}</span>
+              </div>
+            )}
         </div>
       </div>
 
       {/* Action buttons */}
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="flex space-x-2">
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
+        <div className="flex space-x-1">
           <button
             onClick={(e) => handleEdit(e)}
-            className="p-2 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-all duration-200"
-            title="Edit todo"
+            className="p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-all duration-200"
+            title="Edit to do"
           >
-            <Edit className="w-4 h-4" />
+            <Edit className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={(e) => handleDelete(e)}
-            className="p-2 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all duration-200"
-            title="Delete todo"
+            className="p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all duration-200"
+            title="Delete to do"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Drag handle */}
-      <div 
-        {...listeners}
-        className="absolute top-3 left-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-2 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600"
-        title="Drag to move"
-      >
-        <GripVertical className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300" />
-      </div>
     </div>
   );
 };
 
 // Column Component
-const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFileClick, onViewTodo, selectedTodos = [], onSelectTodo, color, columnId, allowDrop = true, dropMessage = null }) => {
+const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFileClick, onViewTodo, selectedTodos = [], onSelectTodo, color, columnId, allowDrop = true, dropMessage = null, isDragOver = false, isDragging = false }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: columnId,
-    disabled: !allowDrop,
+    data: {
+      type: 'column',
+      columnId: columnId
+    }
   });
 
 
@@ -278,44 +256,48 @@ const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFile
         <div 
           ref={setNodeRef}
           className={cn(
-            "space-y-3 min-h-[400px] p-2 border-2 border-dashed rounded-lg transition-all duration-200 relative",
+            "space-y-4 min-h-[300px] p-4 border-2 border-dashed rounded-lg transition-all duration-300 relative w-full",
+            // Enhanced drag feedback
+            isDragging && !isDragOver && "border-gray-300 dark:border-gray-500 bg-gray-50/50 dark:bg-gray-800/50",
             // Invalid drop zone styling
-            !allowDrop && isOver && "border-red-400 bg-red-100 dark:bg-red-900/20 cursor-not-allowed shadow-lg",
+            !allowDrop && (isOver || isDragOver) && "border-red-400 bg-red-50 dark:bg-red-900/10 cursor-not-allowed shadow-lg scale-[1.02]",
             // Valid drop zone styling
-            allowDrop && isOver && "border-green-400 bg-green-100 dark:bg-green-900/20 shadow-lg",
-            // Default styling
-            !isOver && "border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+            allowDrop && (isOver || isDragOver) && "border-blue-400 bg-blue-50 dark:bg-blue-900/10 shadow-lg scale-[1.02]",
+            // Default styling - lighter, more subtle border
+            !isOver && !isDragOver && "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50/30 dark:hover:bg-gray-800/30"
           )}
         >
           {/* Drop message overlay */}
-          {!allowDrop && isOver && dropMessage && (
-            <div className="absolute inset-0 flex items-center justify-center bg-red-100/90 dark:bg-red-900/30 rounded-lg z-10 border-2 border-red-400">
-              <div className="text-center p-4">
-                <div className="text-red-700 dark:text-red-300 text-sm font-medium mb-1">
-                  ❌ Cannot drop here
-                </div>
-                <div className="text-red-600 dark:text-red-400 text-xs">
-                  {dropMessage}
-                </div>
+          {!allowDrop && (isOver || isDragOver) && dropMessage && (
+            <div className="absolute top-2 left-2 right-2 bg-red-100 dark:bg-red-900/50 rounded-md p-2 z-10 border border-red-300 animate-pulse">
+              <div className="text-red-700 dark:text-red-300 text-xs font-medium">
+                ❌ {dropMessage}
               </div>
             </div>
           )}
           
           {/* Valid drop indicator */}
-          {allowDrop && isOver && (
-            <div className="absolute inset-0 flex items-center justify-center bg-green-100/90 dark:bg-green-900/30 rounded-lg z-10 border-2 border-green-400">
-              <div className="text-center p-4">
-                <div className="text-green-700 dark:text-green-300 text-sm font-medium mb-1">
-                  ✅ Drop to move here
-                </div>
-                <div className="text-green-600 dark:text-green-400 text-xs">
-                  {columnId === 'complete' ? 'Mark as complete' : `Move to ${title}`}
-                </div>
+          {allowDrop && (isOver || isDragOver) && (
+            <div className="absolute top-2 left-2 right-2 bg-blue-100 dark:bg-blue-900/50 rounded-md p-2 z-10 border border-blue-300 animate-pulse">
+              <div className="text-blue-700 dark:text-blue-300 text-xs font-medium">
+                ✅ Drop to {columnId === 'complete' ? 'complete' : `move to ${title}`}
               </div>
             </div>
           )}
           
-          {todos.map((todo) => (
+          {todos.length === 0 ? (
+            <div className="flex items-center justify-center h-40 w-full text-gray-400 dark:text-gray-500 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-lg bg-gray-50/30 dark:bg-gray-800/30 hover:bg-gray-100/40 dark:hover:bg-gray-700/40 transition-colors">
+              <div className="text-center p-4">
+                <div className="text-base font-medium mb-2">
+                  {columnId === 'complete' ? 'No completed tasks' : `No ${title.toLowerCase()} tasks`}
+                </div>
+                <div className="text-sm opacity-75">
+                  {columnId === 'complete' ? 'Drop tasks here to mark as complete' : `Drop tasks here to move to ${title}`}
+                </div>
+              </div>
+            </div>
+          ) : (
+            todos.map((todo) => (
             <SortableTodoItem
               key={todo.id}
               todo={todo}
@@ -323,11 +305,12 @@ const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFile
               onDelete={onDelete}
               onToggleComplete={onToggleComplete}
               onFileClick={onFileClick}
-              onViewTodo={onViewTodo}
-              selectedTodos={selectedTodos}
-              onSelectTodo={onSelectTodo}
+                onViewTodo={onViewTodo}
+                selectedTodos={selectedTodos}
+                onSelectTodo={onSelectTodo}
             />
-          ))}
+            ))
+          )}
         </div>
       </SortableContext>
     </div>
@@ -347,6 +330,8 @@ const KanbanBoard = ({
   onSelectTodo
 }) => {
   const [activeId, setActiveId] = useState(null);
+  const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -361,43 +346,59 @@ const KanbanBoard = ({
   // Complete: state = 'complete' (or completed = true for backward compatibility)
   
   const todoTodos = todos.filter(todo => {
-    // Explicitly exclude completed todos first
-    if (todo.completed || todo.state === 'complete') {
-      return false;
-    }
-    // Handle todos with state field
-    if (todo.state === 'todo') {
-      return true;
-    }
-    // Fallback for todos without state field or with undefined state
-    if (!todo.state || todo.state === undefined) {
-      return !todo.completed;
-    }
-    return false;
+    return todo.status === 'pending';
   });
   
-  const inProgressTodos = todos.filter(todo => todo.state === 'inProgress');
+  const inProgressTodos = todos.filter(todo => todo.status === 'in_progress');
   
   const completeTodos = todos.filter(todo => {
-    // Handle todos with state field
-    if (todo.state === 'complete') {
-      return true;
-    }
-    // Fallback for todos without state field or with undefined state
-    if (!todo.state || todo.state === undefined) {
-      return todo.completed;
-    }
-    // Also include todos that are marked as completed regardless of state
-    return todo.completed;
+    return todo.status === 'completed';
   });
   
 
   const handleDragStart = (event) => {
     setActiveId(event.active.id);
+    setIsDragging(true);
+  };
+
+  const handleDragOver = (event) => {
+    const { active, over } = event;
+    
+    // Enhanced visual feedback during drag over
+    if (over) {
+      const overId = over.id;
+      const activeTodo = todos.find(todo => todo.id === active.id);
+      
+      if (activeTodo) {
+        
+        // Update drag over column for visual feedback
+        if (overId === 'todo' || overId === 'in-progress' || overId === 'complete') {
+          setDragOverColumn(overId);
+        } else {
+          // If dropped on another todo, determine column by the todo's current status
+          const overTodo = todos.find(todo => todo.id === overId);
+          if (overTodo) {
+            if (overTodo.status === 'completed') {
+              setDragOverColumn('complete');
+            } else if (overTodo.status === 'in_progress') {
+              setDragOverColumn('in-progress');
+            } else {
+              setDragOverColumn('todo');
+            }
+          }
+        }
+      }
+    } else {
+      setDragOverColumn(null);
+    }
   };
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
+    
+    // Reset drag state
+    setIsDragging(false);
+    setDragOverColumn(null);
     
     if (!over) {
       setActiveId(null);
@@ -414,19 +415,19 @@ const KanbanBoard = ({
       return;
     }
 
-    // Determine target column based on overId
+    // Determine target column based on overId with improved logic
     let targetColumn = 'todo';
     
     // Check if dropped on a droppable area (column)
     if (overId === 'todo' || overId === 'in-progress' || overId === 'complete') {
       targetColumn = overId;
     } else {
-      // If dropped on another todo, determine column by the todo's current state
+      // If dropped on another todo, determine column by the todo's current status
       const overTodo = todos.find(todo => todo.id === overId);
       if (overTodo) {
-        if (overTodo.state === 'complete') {
+        if (overTodo.status === 'completed') {
           targetColumn = 'complete';
-        } else if (overTodo.state === 'inProgress') {
+        } else if (overTodo.status === 'in_progress') {
           targetColumn = 'in-progress';
         } else {
           targetColumn = 'todo';
@@ -434,16 +435,16 @@ const KanbanBoard = ({
       }
     }
 
-    // Determine current column based on todo state
+    // Determine current column based on todo status
     let currentColumn = 'todo';
-    if (activeTodo.state === 'todo') {
+    if (activeTodo.status === 'pending') {
       currentColumn = 'todo';
-    } else if (activeTodo.state === 'inProgress') {
+    } else if (activeTodo.status === 'in_progress') {
       currentColumn = 'in-progress';
-    } else if (activeTodo.state === 'complete') {
+    } else if (activeTodo.status === 'completed') {
       currentColumn = 'complete';
     } else {
-      // Fallback for existing todos without state field or with undefined state
+      // Fallback for existing todos without status field
       currentColumn = activeTodo.completed ? 'complete' : 'todo';
     }
 
@@ -463,6 +464,8 @@ const KanbanBoard = ({
 
   const handleDragCancel = () => {
     setActiveId(null);
+    setIsDragging(false);
+    setDragOverColumn(null);
   };
 
 
@@ -473,16 +476,16 @@ const KanbanBoard = ({
     const activeTodo = todos.find(todo => todo.id === activeId);
     if (!activeTodo) return true;
     
-    // Determine current column based on todo state
+    // Determine current column based on todo status
     let currentColumn = 'todo';
-    if (activeTodo.state === 'todo') {
+    if (activeTodo.status === 'pending') {
       currentColumn = 'todo';
-    } else if (activeTodo.state === 'inProgress') {
+    } else if (activeTodo.status === 'in_progress') {
       currentColumn = 'in-progress';
-    } else if (activeTodo.state === 'complete') {
+    } else if (activeTodo.status === 'completed') {
       currentColumn = 'complete';
     } else {
-      // Fallback for existing todos without state field
+      // Fallback for existing todos without status field
       currentColumn = activeTodo.completed ? 'complete' : 'todo';
     }
     
@@ -509,13 +512,13 @@ const KanbanBoard = ({
     const activeTodo = todos.find(todo => todo.id === activeId);
     if (!activeTodo) return null;
     
-    // Determine current column based on todo state
+    // Determine current column based on todo status
     let currentColumn = 'todo';
-    if (activeTodo.state === 'todo') {
+    if (activeTodo.status === 'pending') {
       currentColumn = 'todo';
-    } else if (activeTodo.state === 'inProgress') {
+    } else if (activeTodo.status === 'in_progress') {
       currentColumn = 'in-progress';
-    } else if (activeTodo.state === 'complete') {
+    } else if (activeTodo.status === 'completed') {
       currentColumn = 'complete';
     } else {
       currentColumn = activeTodo.completed ? 'complete' : 'todo';
@@ -532,67 +535,63 @@ const KanbanBoard = ({
     return null;
   };
 
+  // Define columns configuration
+  const columns = [
+    {
+      title: "To Do",
+      todos: todoTodos,
+      color: "bg-blue-500",
+      id: "todo",
+    },
+    {
+      title: "In Progress",
+      todos: inProgressTodos,
+      color: "bg-yellow-500",
+      id: "in-progress",
+    },
+    {
+      title: "Complete",
+      todos: completeTodos,
+      color: "bg-green-500",
+      id: "complete",
+    },
+  ];
+
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <KanbanColumn
-          title="Todo"
-          todos={todoTodos}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onToggleComplete={onToggleComplete}
-          onFileClick={onFileClick}
-          onViewTodo={onViewTodo}
-          selectedTodos={selectedTodos}
-          onSelectTodo={onSelectTodo}
-          color="bg-blue-500"
-          columnId="todo"
-          allowDrop={getColumnAllowDrop('todo')}
-          dropMessage={getDropMessage('todo')}
-        />
-        
-        <KanbanColumn
-          title="In Progress"
-          todos={inProgressTodos}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onToggleComplete={onToggleComplete}
-          onFileClick={onFileClick}
-          onViewTodo={onViewTodo}
-          selectedTodos={selectedTodos}
-          onSelectTodo={onSelectTodo}
-          color="bg-yellow-500"
-          columnId="in-progress"
-          allowDrop={getColumnAllowDrop('in-progress')}
-          dropMessage={getDropMessage('in-progress')}
-        />
-        
-        <KanbanColumn
-          title="Complete"
-          todos={completeTodos}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onToggleComplete={onToggleComplete}
-          onFileClick={onFileClick}
-          onViewTodo={onViewTodo}
-          selectedTodos={selectedTodos}
-          onSelectTodo={onSelectTodo}
-          color="bg-green-500"
-          columnId="complete"
-          allowDrop={getColumnAllowDrop('complete')}
-          dropMessage={getDropMessage('complete')}
-        />
+        {columns.map(({ title, todos, color, id }) => (
+          <KanbanColumn
+            key={id}
+            title={title}
+            todos={todos}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onToggleComplete={onToggleComplete}
+            onFileClick={onFileClick}
+            onViewTodo={onViewTodo}
+            selectedTodos={selectedTodos}
+            onSelectTodo={onSelectTodo}
+            color={color}
+            columnId={id}
+            allowDrop={getColumnAllowDrop(id)}
+            dropMessage={getDropMessage(id)}
+            isDragOver={dragOverColumn === id}
+            isDragging={isDragging}
+          />
+        ))}
       </div>
 
       <DragOverlay>
         {activeId ? (
-          <div className="opacity-90 transform rotate-2 scale-105 shadow-2xl">
+          <div className="opacity-95 transform rotate-1 scale-110 shadow-2xl border-2 border-blue-400 rounded-xl bg-white dark:bg-gray-800">
             <SortableTodoItem
               todo={todos.find(todo => todo.id === activeId)}
               onEdit={() => {}}

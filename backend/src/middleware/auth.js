@@ -113,12 +113,17 @@ const optionalAuth = async (req, res, next) => {
 };
 
 // Generate JWT token
-const generateToken = (userId) => {
+const generateToken = (userId, rememberMe = false) => {
+  // Set different expiration times based on rememberMe
+  const expiresIn = rememberMe 
+    ? process.env.JWT_REMEMBER_EXPIRE || '30d'  // 30 days for remember me
+    : process.env.JWT_EXPIRE || '24h';          // 24 hours for normal login
+
   return jwt.sign(
     { userId },
     process.env.JWT_SECRET,
     { 
-      expiresIn: process.env.JWT_EXPIRE || '24h',
+      expiresIn,
       issuer: 'todo-app',
       audience: 'todo-app-users'
     }
@@ -126,12 +131,17 @@ const generateToken = (userId) => {
 };
 
 // Generate refresh token
-const generateRefreshToken = (userId) => {
+const generateRefreshToken = (userId, rememberMe = false) => {
+  // Set different expiration times based on rememberMe
+  const expiresIn = rememberMe 
+    ? process.env.JWT_REFRESH_REMEMBER_EXPIRE || '60d'  // 60 days for remember me
+    : process.env.JWT_REFRESH_EXPIRE || '7d';           // 7 days for normal login
+
   return jwt.sign(
     { userId, type: 'refresh' },
     process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
     { 
-      expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d',
+      expiresIn,
       issuer: 'todo-app',
       audience: 'todo-app-users'
     }

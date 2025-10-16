@@ -38,35 +38,20 @@ router.get('/todos/json', authenticateToken, async (req, res) => {
       todos = await Todo.findByUserId(userId, options);
     }
 
-    // Prepare export data
-    const exportData = {
-      exportInfo: {
-        exportedAt: new Date().toISOString(),
-        exportedBy: req.user.username,
-        totalTodos: todos.todos.length,
-        filters: {
-          search,
-          priority,
-          category,
-          status,
-          startDate,
-          endDate
-        }
-      },
-      todos: todos.todos.map(todo => ({
-        id: todo.id,
-        title: todo.title,
-        description: todo.description,
-        priority: todo.priority,
-        category: todo.category,
-        due_date: todo.due_date,
-        completed: todo.completed,
-        file_count: todo.file_count || 0,
-        created_at: todo.created_at,
-        updated_at: todo.updated_at,
-        ...(includeAttachments === 'true' && { attachments: todo.attachments })
-      }))
-    };
+    // Prepare export data with only todos (no account details)
+    const exportData = todos.todos.map(todo => ({
+      id: todo.id,
+      title: todo.title,
+      description: todo.description,
+      priority: todo.priority,
+      category: todo.category,
+      due_date: todo.due_date,
+      completed: todo.completed,
+      file_count: todo.file_count || 0,
+      created_at: todo.created_at,
+      updated_at: todo.updated_at,
+      ...(includeAttachments === 'true' && { attachments: todo.attachments })
+    }));
 
     // Set headers for file download
     const filename = `todos_export_${new Date().toISOString().split('T')[0]}.json`;
@@ -176,6 +161,75 @@ router.get('/todos/csv', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error exporting todos',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Export comprehensive profile data (todos + account info)
+router.get('/profile/complete', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      includeAttachments = false
+    } = req.query;
+
+    // Get all todos for the user
+    const options = {
+      limit: 10000 // Large limit for export
+    };
+
+    let todos;
+    if (includeAttachments === 'true') {
+      todos = await Todo.findWithAttachments(userId, options);
+    } else {
+      todos = await Todo.findByUserId(userId, options);
+    }
+
+    // Prepare comprehensive export data with account info and todos
+    const exportData = {
+      exportInfo: {
+        exportedAt: new Date().toISOString(),
+        exportedBy: req.user.username,
+        totalTodos: todos.todos.length,
+        exportType: 'comprehensive',
+        version: '1.0'
+      },
+      accountData: {
+        id: req.user.id,
+        username: req.user.username,
+        email: req.user.email,
+        created_at: req.user.created_at,
+        last_login: req.user.last_login
+      },
+      todos: todos.todos.map(todo => ({
+        id: todo.id,
+        title: todo.title,
+        description: todo.description,
+        priority: todo.priority,
+        category: todo.category,
+        due_date: todo.due_date,
+        completed: todo.completed,
+        file_count: todo.file_count || 0,
+        created_at: todo.created_at,
+        updated_at: todo.updated_at,
+        ...(includeAttachments === 'true' && { attachments: todo.attachments })
+      }))
+    };
+
+    // Set headers for file download
+    const filename = `complete_data_export_${new Date().toISOString().split('T')[0]}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    logger.info(`Comprehensive export completed: ${todos.todos.length} todos and account data exported by user ${userId}`);
+
+    res.json(exportData);
+  } catch (error) {
+    logger.error('Error exporting comprehensive profile data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error exporting profile data',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

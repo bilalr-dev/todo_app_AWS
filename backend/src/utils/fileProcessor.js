@@ -26,6 +26,13 @@ class FileProcessor {
     try {
       const thumbnailPath = path.join(this.thumbnailDir, `thumb_${filename}`);
       
+      logger.debug('fileProcessor: generateThumbnail called', { 
+        filePath, 
+        filename, 
+        thumbnailPath,
+        thumbnailDir: this.thumbnailDir 
+      });
+      
       await sharp(filePath)
         .resize(200, 200, {
           fit: 'inside',
@@ -34,6 +41,7 @@ class FileProcessor {
         .jpeg({ quality: 80 })
         .toFile(thumbnailPath);
 
+      logger.debug('fileProcessor: Thumbnail file created successfully', { thumbnailPath });
       return thumbnailPath;
     } catch (error) {
       logger.error('Error generating thumbnail:', error);
@@ -129,10 +137,23 @@ class FileProcessor {
       
       // Generate thumbnail for images
       if (this.isImage(file.mimetype)) {
+        logger.debug('fileProcessor: Generating thumbnail for image', { 
+          filePath: file.path, 
+          filename: file.filename, 
+          mimeType: file.mimetype 
+        });
         thumbnailPath = await this.generateThumbnail(file.path, file.filename);
+        logger.debug('fileProcessor: Thumbnail generated', { 
+          thumbnailPath, 
+          relativePath: thumbnailPath ? this.getThumbnailRelativePath(thumbnailPath) : null 
+        });
+      } else {
+        logger.debug('fileProcessor: Skipping thumbnail generation for non-image', { 
+          mimeType: file.mimetype 
+        });
       }
 
-      return {
+      const result = {
         filename: file.filename,
         originalName: file.originalname,
         filePath: this.getRelativePath(file.path),
@@ -143,6 +164,9 @@ class FileProcessor {
         created: fileInfo.created,
         modified: fileInfo.modified
       };
+
+      logger.debug('fileProcessor: processFile result', result);
+      return result;
     } catch (error) {
       logger.error('Error processing file:', error);
       throw error;

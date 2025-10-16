@@ -1,10 +1,11 @@
 // Logging utilities for v0.5
 const winston = require('winston');
 const path = require('path');
+const fs = require('fs');
 
 // Create logs directory if it doesn't exist
 const logDir = path.join(__dirname, '../../logs');
-require('fs').mkdirSync(logDir, { recursive: true });
+fs.mkdirSync(logDir, { recursive: true });
 
 // Define log format
 const logFormat = winston.format.combine(

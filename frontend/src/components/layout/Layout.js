@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthProvider';
 import { useTheme } from '../../context/ThemeContext';
-import { useTodos } from '../../context/TodoContext';
+import { useTodos } from '../../context/TodoProvider';
 import { Button } from '../common/Button';
 import {
   Menu,
@@ -17,7 +17,9 @@ import {
   Calendar,
   AlertTriangle
 } from 'lucide-react';
-import { cn, formatDate } from '../../utils/helpers';
+import { cn, formatDate, isOverdue } from '../../utils/helpers';
+import { TODO_CONFIG } from '../../utils/constants';
+import { CategoryBadge } from '../common/Badge';
 
 const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true); // Start with sidebar open
@@ -30,7 +32,6 @@ const Layout = () => {
       const saved = localStorage.getItem('clearedTodos');
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch (error) {
-      console.error('Error loading cleared todos from localStorage:', error);
       return new Set();
     }
   }); // Track which todos have been cleared from notifications
@@ -40,7 +41,6 @@ const Layout = () => {
       const saved = localStorage.getItem('seenTodos');
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch (error) {
-      console.error('Error loading seen todos from localStorage:', error);
       return new Set();
     }
   }); // Track which todos have been seen
@@ -48,7 +48,7 @@ const Layout = () => {
   const profileMenuRef = useRef(null);
   const notificationMenuRef = useRef(null);
   const todoPopupRef = useRef(null);
-  const prevTodosRef = useRef(new Set());
+  const prevTodosRef = useRef({ todoIds: new Set(), todosMap: new Map() });
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { todos } = useTodos();
@@ -56,7 +56,7 @@ const Layout = () => {
   // Create a hash of todos to force memoization updates
   const todosHash = useMemo(() => {
     if (!Array.isArray(todos)) return '';
-    return todos.map(t => `${t.id}-${t.priority}-${t.due_date}-${t.completed}`).join('|');
+    return todos.map(t => `${t.id}-${t.priority}-${t.due_date}-${t.status}`).join('|');
   }, [todos]);
   const location = useLocation();
   const navigate = useNavigate();
@@ -70,7 +70,7 @@ const Layout = () => {
   const urgentTodos = useMemo(() => {
     if (!Array.isArray(todos)) return [];
     const filtered = todos.filter(todo => {
-      if (!todo.due_date || todo.completed || todo.priority !== 'high') return false;
+      if (!todo.due_date || todo.status === 'completed' || todo.priority !== 'high') return false;
       
       // Handle both date string formats (YYYY-MM-DD and full ISO strings)
       let dueDate;
@@ -100,7 +100,9 @@ const Layout = () => {
 
   // Memoized visible urgent todos count
   const visibleUrgentTodosCount = useMemo(() => {
-    return urgentTodos.filter(todo => !clearedTodos.has(todo.id) && !seenTodos.has(todo.id)).length;
+    const count = urgentTodos.filter(todo => !clearedTodos.has(todo.id) && !seenTodos.has(todo.id)).length;
+    
+    return count;
   }, [urgentTodos, clearedTodos, seenTodos]);
 
   const handleLogout = async () => {
@@ -122,10 +124,7 @@ const Layout = () => {
     localStorage.removeItem('clearedTodos');
   };
 
-  // Add to window for debugging
-  useEffect(() => {
-    window.clearNotificationState = clearNotificationState;
-  }, []);
+
 
   const handleClearNotifications = () => {
     // Mark all urgent todos as cleared (remove from notifications)
@@ -193,7 +192,7 @@ const Layout = () => {
     try {
       localStorage.setItem('seenTodos', JSON.stringify([...seenTodos]));
     } catch (error) {
-      console.error('Error saving seen todos to localStorage:', error);
+      // Silently fail if localStorage is not available
     }
   }, [seenTodos]);
 
@@ -202,7 +201,7 @@ const Layout = () => {
     try {
       localStorage.setItem('clearedTodos', JSON.stringify([...clearedTodos]));
     } catch (error) {
-      console.error('Error saving cleared todos to localStorage:', error);
+      // Silently fail if localStorage is not available
     }
   }, [clearedTodos]);
 
@@ -210,7 +209,7 @@ const Layout = () => {
   useEffect(() => {
     if (!Array.isArray(todos)) return;
     const currentTodoIds = new Set(todos.map(todo => todo.id));
-    const prevTodoIds = prevTodosRef.current;
+    const prevTodoIds = prevTodosRef.current.todoIds;
     
     // Only clean up if we had todos before and now we have fewer (actual deletion)
     // Don't clean up on initial load (when prevTodoIds is empty)
@@ -247,8 +246,146 @@ const Layout = () => {
     }
     
     // Update the ref with current todo IDs
-    prevTodosRef.current = currentTodoIds;
+    prevTodosRef.current.todoIds = currentTodoIds;
   }, [todos]);
+
+  // Reset notification state when specific todos are updated (to show only updated todos in notifications)
+  useEffect(() => {
+    if (!Array.isArray(todos) || todos.length === 0) return;
+    
+    // Create a map of current todos for comparison
+    const currentTodosMap = new Map(todos.map(todo => [todo.id, todo]));
+    const prevTodosMap = prevTodosRef.current.todosMap || new Map();
+    
+    // Find todos that have been updated (not new todos, not deleted todos)
+    const updatedTodoIds = new Set();
+    
+    currentTodosMap.forEach((currentTodo, id) => {
+      const prevTodo = prevTodosMap.get(id);
+      
+      // If this todo existed before and has been modified
+      if (prevTodo) {
+        const hasChanged = 
+          currentTodo.status !== prevTodo.status ||
+          currentTodo.priority !== prevTodo.priority ||
+          currentTodo.due_date !== prevTodo.due_date ||
+          currentTodo.title !== prevTodo.title;
+        
+        if (hasChanged) {
+          updatedTodoIds.add(id);
+        }
+      }
+    });
+    
+    // If we have updated todos, reset their notification state
+    if (updatedTodoIds.size > 0) {
+      
+      // Remove updated todos from seen and cleared sets
+      setSeenTodos(prev => {
+        const newSeenTodos = new Set(prev);
+        updatedTodoIds.forEach(id => newSeenTodos.delete(id));
+        return newSeenTodos;
+      });
+      
+      setClearedTodos(prev => {
+        const newClearedTodos = new Set(prev);
+        updatedTodoIds.forEach(id => newClearedTodos.delete(id));
+        return newClearedTodos;
+      });
+      
+      // Update localStorage
+      const currentSeenTodos = Array.from(seenTodos).filter(id => !updatedTodoIds.has(id));
+      const currentClearedTodos = Array.from(clearedTodos).filter(id => !updatedTodoIds.has(id));
+      
+      localStorage.setItem('seenTodos', JSON.stringify(currentSeenTodos));
+      localStorage.setItem('clearedTodos', JSON.stringify(currentClearedTodos));
+    }
+    
+    // Update the ref with current todos map
+    prevTodosRef.current.todosMap = currentTodosMap;
+  }, [todos, seenTodos, clearedTodos]);
+
+  // Clean up cleared/seen todos that are no longer urgent (e.g., completed or due date changed)
+  useEffect(() => {
+    if (!Array.isArray(todos) || todos.length === 0) return;
+    
+    // Create a map of current urgent todos for efficient lookup
+    const currentUrgentTodosMap = new Map(urgentTodos.map(todo => [todo.id, todo]));
+    
+    // Remove from cleared todos any todos that are no longer urgent
+    setClearedTodos(prev => {
+      const newClearedTodos = new Set();
+      prev.forEach(id => {
+        const currentTodo = currentUrgentTodosMap.get(id);
+        if (currentTodo) {
+          // Check if this todo is still urgent with the same criteria
+          if (currentTodo.status !== 'completed' && 
+              currentTodo.priority === 'high' && 
+              currentTodo.due_date) {
+            
+            // Check if due date is still within 5 days
+            let dueDate;
+            if (typeof currentTodo.due_date === 'string' && currentTodo.due_date.includes('T')) {
+              dueDate = new Date(currentTodo.due_date);
+            } else {
+              dueDate = new Date(currentTodo.due_date + 'T00:00:00');
+            }
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const fiveDaysFromNow = new Date(today);
+            fiveDaysFromNow.setDate(today.getDate() + 5);
+            fiveDaysFromNow.setHours(23, 59, 59, 999);
+            
+            dueDate.setHours(0, 0, 0, 0);
+            
+            if (dueDate <= fiveDaysFromNow) {
+              newClearedTodos.add(id);
+            }
+          }
+        }
+      });
+      return newClearedTodos;
+    });
+    
+    // Remove from seen todos any todos that are no longer urgent
+    setSeenTodos(prev => {
+      const newSeenTodos = new Set();
+      prev.forEach(id => {
+        const currentTodo = currentUrgentTodosMap.get(id);
+        if (currentTodo) {
+          // Check if this todo is still urgent with the same criteria
+          if (currentTodo.status !== 'completed' && 
+              currentTodo.priority === 'high' && 
+              currentTodo.due_date) {
+            
+            // Check if due date is still within 5 days
+            let dueDate;
+            if (typeof currentTodo.due_date === 'string' && currentTodo.due_date.includes('T')) {
+              dueDate = new Date(currentTodo.due_date);
+            } else {
+              dueDate = new Date(currentTodo.due_date + 'T00:00:00');
+            }
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const fiveDaysFromNow = new Date(today);
+            fiveDaysFromNow.setDate(today.getDate() + 5);
+            fiveDaysFromNow.setHours(23, 59, 59, 999);
+            
+            dueDate.setHours(0, 0, 0, 0);
+            
+            if (dueDate <= fiveDaysFromNow) {
+              newSeenTodos.add(id);
+            }
+          }
+        }
+      });
+      return newSeenTodos;
+    });
+  }, [urgentTodos, todos]);
 
   // Handle todo updates - remove from cleared/seen only if they become non-urgent
   useEffect(() => {
@@ -296,24 +433,24 @@ const Layout = () => {
         />
       )}
 
-              {/* Sidebar */}
-              <div className={cn(
-                "w-64 bg-card border-r border-border transition-all duration-300 ease-in-out",
-                isMobile 
-                  ? "fixed inset-y-0 left-0 z-50 transform" + (sidebarOpen ? " translate-x-0" : " -translate-x-full")
-                  : sidebarOpen 
-                    ? "fixed inset-y-0 left-0 z-50" 
-                    : "fixed inset-y-0 left-0 z-50 transform -translate-x-full"
-              )}>
+      {/* Sidebar */}
+      <div className={cn(
+        "w-64 bg-card border-r border-border transition-all duration-300 ease-in-out",
+        isMobile 
+          ? "fixed inset-y-0 left-0 z-50 transform" + (sidebarOpen ? " translate-x-0" : " -translate-x-full")
+          : sidebarOpen 
+            ? "fixed inset-y-0 left-0 z-50" 
+            : "fixed inset-y-0 left-0 z-50 transform -translate-x-full"
+      )}>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-6 border-b border-border">
-                    <div className="flex items-center space-x-2">
-                      <div className="icon-bg">
-                        <CheckCircle2 className="icon-modern-md text-primary" />
-                      </div>
-                      <span className="text-xl font-bold text-foreground">Todo App</span>
-                    </div>
+            <div className="flex items-center space-x-2">
+              <div className="icon-bg">
+                <CheckCircle2 className="icon-modern-md text-primary" />
+              </div>
+              <span className="text-xl font-bold text-foreground">Todo App</span>
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -329,40 +466,39 @@ const Layout = () => {
             {navigation.map((item) => {
               const Icon = item.icon;
               return (
-                        <button
-                          key={item.name}
-                          onClick={() => {
-                            navigate(item.href);
-                            // Only close sidebar on mobile devices
-                            if (isMobile) {
-                              setSidebarOpen(false);
-                            }
-                          }}
-                          className={cn(
-                            "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all duration-300 ease-out",
-                            isActive(item.href)
-                              ? "bg-primary text-primary-foreground shadow-lg"
-                              : "text-muted-foreground hover:text-foreground hover:bg-accent hover:shadow-md"
-                          )}
-                        >
-                          <Icon className={cn(
-                            "icon-modern-md",
-                            isActive(item.href) ? "icon-glow" : ""
-                          )} />
-                          <span className="font-medium">{item.name}</span>
-                        </button>
+                <button
+                  key={item.name}
+                  onClick={() => {
+                    navigate(item.href);
+                    // Only close sidebar on mobile devices
+                    if (isMobile) {
+                      setSidebarOpen(false);
+                    }
+                  }}
+                  className={cn(
+                    "w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-all duration-300 ease-out",
+                    isActive(item.href)
+                      ? "bg-primary text-primary-foreground shadow-lg"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent hover:shadow-md"
+                  )}
+                >
+                  <Icon className={cn(
+                    "icon-modern-md",
+                    isActive(item.href) ? "icon-glow" : ""
+                  )} />
+                  <span className="font-medium">{item.name}</span>
+                </button>
               );
             })}
           </nav>
-
         </div>
       </div>
 
-              {/* Main content */}
-              <div className={cn(
-                "relative transition-all duration-300 ease-in-out",
-                !isMobile && sidebarOpen ? "ml-64" : "ml-0"
-              )}>
+      {/* Main content area */}
+      <div className={cn(
+        "relative transition-all duration-300 ease-in-out",
+        !isMobile && sidebarOpen ? "ml-64" : "ml-0"
+      )}>
         {/* Top bar */}
         <header className={cn(
           "fixed top-0 right-0 z-40 bg-background/80 backdrop-blur-sm border-b border-border transition-all duration-300 ease-in-out",
@@ -370,16 +506,16 @@ const Layout = () => {
         )}>
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
             <div className="flex items-center space-x-4">
-                      {!sidebarOpen && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setSidebarOpen(!sidebarOpen)}
-                          className="icon-button"
-                        >
-                          <Menu className="icon-modern-md" />
-                        </Button>
-                      )}
+              {!sidebarOpen && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="icon-button"
+                >
+                  <Menu className="icon-modern-md" />
+                </Button>
+              )}
               
               <div className="hidden sm:block">
                 <h1 className="text-xl font-semibold text-foreground">
@@ -389,19 +525,19 @@ const Layout = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-                      {/* Dark mode toggle */}
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={toggleTheme}
-                        className="icon-button"
-                      >
-                        {theme === 'dark' ? (
-                          <Sun className="icon-modern-md" />
-                        ) : (
-                          <Moon className="icon-modern-md" />
-                        )}
-                      </Button>
+              {/* Dark mode toggle */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={toggleTheme}
+                className="icon-button"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="icon-modern-md" />
+                ) : (
+                  <Moon className="icon-modern-md" />
+                )}
+              </Button>
 
               {/* Notifications */}
               <div className="relative" ref={notificationMenuRef}>
@@ -422,24 +558,24 @@ const Layout = () => {
                 {/* Notification dropdown menu */}
                 {notificationMenuOpen && (
                   <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-lg shadow-lg z-50">
-                            <div className="p-4 border-b border-border">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-foreground flex items-center">
-                                  <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />
-                                  Urgent Todos ({visibleUrgentTodosCount > 99 ? '+99' : visibleUrgentTodosCount})
-                                </h3>
-                                {visibleUrgentTodosCount > 0 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleClearNotifications}
-                                    className="text-xs text-muted-foreground hover:text-foreground"
-                                  >
-                                    Clear
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
+                    <div className="p-4 border-b border-border">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-foreground flex items-center">
+                          <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />
+                          Urgent Todos ({visibleUrgentTodosCount > 99 ? '+99' : visibleUrgentTodosCount})
+                        </h3>
+                        {visibleUrgentTodosCount > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearNotifications}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <div className="max-h-64 overflow-y-auto">
                       {visibleUrgentTodosCount === 0 ? (
                         <div className="p-4 text-center text-muted-foreground">
@@ -451,11 +587,11 @@ const Layout = () => {
                           {urgentTodos.filter(todo => !clearedTodos.has(todo.id)).map((todo) => {
                             const isSeen = seenTodos.has(todo.id);
                             return (
-                            <div
-                              key={todo.id}
-                              className="p-3 hover:bg-accent rounded-lg transition-colors cursor-pointer"
-                              onClick={() => handleTodoClick(todo)}
-                            >
+                              <div
+                                key={todo.id}
+                                className="p-3 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                                onClick={() => handleTodoClick(todo)}
+                              >
                                 <div className="flex items-start space-x-3">
                                   {!isSeen && (
                                     <div className="h-2 w-2 bg-destructive rounded-full mt-2 flex-shrink-0" />
@@ -467,14 +603,9 @@ const Layout = () => {
                                     <p className={`text-sm truncate ${isSeen ? 'text-muted-foreground' : 'font-medium text-foreground'}`}>
                                       {todo.title}
                                     </p>
-                                    {todo.description && (
-                                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                        {todo.description}
-                                      </p>
-                                    )}
-                                    <div className="flex items-center mt-2 text-xs text-muted-foreground">
+                                    <div className="flex items-center mt-1 text-xs text-muted-foreground">
                                       <Calendar className="h-3 w-3 mr-1" />
-                                      Due: {formatDate(new Date(todo.due_date), 'MMM d, yyyy')}
+                                      Due: {formatDate(new Date(todo.due_date))}
                                     </div>
                                   </div>
                                 </div>
@@ -490,18 +621,18 @@ const Layout = () => {
 
               {/* User menu */}
               <div className="relative" ref={profileMenuRef}>
-                        <button
-                          onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                          className="flex items-center space-x-3 hover:bg-accent rounded-lg p-1 transition-all duration-300 ease-out hover:shadow-md"
-                        >
-                          <div className="hidden sm:block text-right">
-                            <p className="text-sm font-medium text-foreground">{user?.username}</p>
-                            <p className="text-xs text-muted-foreground">{user?.email}</p>
-                          </div>
-                          <div className="icon-bg">
-                            <User className="icon-modern-sm text-primary" />
-                          </div>
-                        </button>
+                <button
+                  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                  className="flex items-center space-x-3 hover:bg-accent rounded-lg p-1 transition-all duration-300 ease-out hover:shadow-md"
+                >
+                  <div className="hidden sm:block text-right">
+                    <p className="text-sm font-medium text-foreground">{user?.username}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                  <div className="icon-bg">
+                    <User className="icon-modern-sm text-primary" />
+                  </div>
+                </button>
 
                 {/* Profile dropdown menu */}
                 {profileMenuOpen && (
@@ -575,7 +706,7 @@ const Layout = () => {
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">Due Date</h4>
                 <div className="flex items-center text-foreground">
                   <Calendar className="h-4 w-4 mr-2" />
-                  {formatDate(new Date(selectedTodo.due_date), 'MMM d, yyyy')}
+                  {formatDate(new Date(selectedTodo.due_date))}
                 </div>
               </div>
               
@@ -595,9 +726,7 @@ const Layout = () => {
               {selectedTodo.category && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-1">Category</h4>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                    {selectedTodo.category}
-                  </span>
+                  <CategoryBadge category={selectedTodo.category} size="sm" />
                 </div>
               )}
             </div>

@@ -131,7 +131,7 @@ describe('Todo App E2E Tests', () => {
       await page.click('text=Work');
       
       // Set due date
-      await page.fill('input[name="due_date"]', '2024-12-31');
+      await page.fill('input[name="due_date"]', '2025-12-31');
       
       // Submit form
       await page.click('button[type="submit"]');

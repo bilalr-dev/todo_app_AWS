@@ -27,7 +27,6 @@ const DatePicker = ({
       try {
         return new Date(value);
       } catch (error) {
-        console.warn('Invalid date value:', value);
         return null;
       }
     }
@@ -71,7 +70,7 @@ const DatePicker = ({
           setSelectedDate(date);
         }
       } catch (error) {
-        console.warn('Invalid date value in useEffect:', value);
+        // Invalid date value, ignore
       }
     } else {
       setSelectedDate(null);
@@ -82,7 +81,7 @@ const DatePicker = ({
     if (!date) return '';
     // Handle both Date objects and date strings
     const dateObj = typeof date === 'string' ? new Date(date) : date;
-    return formatDate(dateObj, 'MMM d, yyyy');
+    return formatDate(dateObj);
   };
 
   const handleDateSelect = (date) => {

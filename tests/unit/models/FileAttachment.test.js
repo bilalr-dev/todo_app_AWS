@@ -25,8 +25,8 @@ describe('FileAttachment Model', () => {
         mime_type: 'image/jpeg',
         file_type: 'image',
         thumbnail_path: 'uploads/thumbnails/thumb_test-file.jpg',
-        created_at: '2024-01-01T00:00:00.000Z',
-        updated_at: '2024-01-01T00:00:00.000Z'
+        created_at: '2025-10-01T00:00:00.000Z',
+        updated_at: '2025-10-01T00:00:00.000Z'
       };
 
       const attachment = new FileAttachment(data);
@@ -60,8 +60,8 @@ describe('FileAttachment Model', () => {
         rows: [{
           id: 1,
           ...attachmentData,
-          created_at: '2024-01-01T00:00:00.000Z',
-          updated_at: '2024-01-01T00:00:00.000Z'
+          created_at: '2025-10-01T00:00:00.000Z',
+          updated_at: '2025-10-01T00:00:00.000Z'
         }]
       };
 
@@ -95,8 +95,8 @@ describe('FileAttachment Model', () => {
           mime_type: 'image/jpeg',
           file_type: 'image',
           thumbnail_path: 'uploads/thumbnails/thumb_test-file.jpg',
-          created_at: '2024-01-01T00:00:00.000Z',
-          updated_at: '2024-01-01T00:00:00.000Z'
+          created_at: '2025-10-01T00:00:00.000Z',
+          updated_at: '2025-10-01T00:00:00.000Z'
         }]
       };
 
@@ -136,8 +136,8 @@ describe('FileAttachment Model', () => {
             mime_type: 'image/jpeg',
             file_type: 'image',
             thumbnail_path: 'uploads/thumbnails/thumb_test-file1.jpg',
-            created_at: '2024-01-01T00:00:00.000Z',
-            updated_at: '2024-01-01T00:00:00.000Z'
+            created_at: '2025-10-01T00:00:00.000Z',
+            updated_at: '2025-10-01T00:00:00.000Z'
           },
           {
             id: 2,
@@ -149,8 +149,8 @@ describe('FileAttachment Model', () => {
             mime_type: 'application/pdf',
             file_type: 'document',
             thumbnail_path: null,
-            created_at: '2024-01-01T00:00:00.000Z',
-            updated_at: '2024-01-01T00:00:00.000Z'
+            created_at: '2025-10-01T00:00:00.000Z',
+            updated_at: '2025-10-01T00:00:00.000Z'
           }
         ]
       };
@@ -213,8 +213,8 @@ describe('FileAttachment Model', () => {
         mime_type: 'image/jpeg',
         file_type: 'image',
         thumbnail_path: 'uploads/thumbnails/thumb_test-file.jpg',
-        created_at: '2024-01-01T00:00:00.000Z',
-        updated_at: '2024-01-01T00:00:00.000Z'
+        created_at: '2025-10-01T00:00:00.000Z',
+        updated_at: '2025-10-01T00:00:00.000Z'
       });
 
       query.mockResolvedValueOnce({});
@@ -242,8 +242,8 @@ describe('FileAttachment Model', () => {
         mime_type: 'image/jpeg',
         file_type: 'image',
         thumbnail_path: 'uploads/thumbnails/thumb_test-file.jpg',
-        created_at: '2024-01-01T00:00:00.000Z',
-        updated_at: '2024-01-01T00:00:00.000Z'
+        created_at: '2025-10-01T00:00:00.000Z',
+        updated_at: '2025-10-01T00:00:00.000Z'
       };
 
       const attachment = new FileAttachment(data);

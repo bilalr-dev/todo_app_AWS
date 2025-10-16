@@ -68,10 +68,13 @@ const ConfirmDialog = ({
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={handleBackdropClick}
     >
-      <Card className={cn(
-        "w-full max-w-md mx-4 transform transition-all duration-200 ease-out",
-        isVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
-      )}>
+      <Card 
+        className={cn(
+          "w-full max-w-md mx-4 transform transition-all duration-200 ease-out",
+          isVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -85,7 +88,10 @@ const ConfirmDialog = ({
             <Button
               variant="ghost"
               size="icon"
-              onClick={onClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
               className="h-8 w-8 icon-button"
             >
               <X className="icon-modern-sm" />
@@ -101,13 +107,19 @@ const ConfirmDialog = ({
           <div className="flex justify-end space-x-3">
             <Button
               variant="outline"
-              onClick={onClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
               className="px-6"
             >
               {cancelText}
             </Button>
             <Button
-              onClick={onConfirm}
+              onClick={(e) => {
+                e.stopPropagation();
+                onConfirm();
+              }}
               className={cn("px-6", styles.confirmButton)}
             >
               {confirmText}

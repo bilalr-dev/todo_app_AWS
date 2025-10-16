@@ -44,9 +44,9 @@ router.post('/register', validateUserRegistration, async (req, res) => {
     // Create new user
     const user = await User.create({ username, email, password });
     
-    // Generate tokens
-    const token = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    // Generate tokens (default to normal expiration for registration)
+    const token = generateToken(user.id, false);
+    const refreshToken = generateRefreshToken(user.id, false);
 
     logger.info('User registered successfully', { userId: user.id, email });
 
@@ -76,7 +76,7 @@ router.post('/register', validateUserRegistration, async (req, res) => {
 // User login
 router.post('/login', validateUserLogin, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     // Find user by email
     const user = await User.findByEmail(email);
@@ -106,9 +106,9 @@ router.post('/login', validateUserLogin, async (req, res) => {
       });
     }
 
-    // Generate tokens
-    const token = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
+    // Generate tokens with different expiration based on rememberMe
+    const token = generateToken(user.id, rememberMe);
+    const refreshToken = generateRefreshToken(user.id, rememberMe);
 
     // Update last login (placeholder for future implementation)
     await user.updateLastLogin();
@@ -149,7 +149,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Profile fetch error', { error: error.message, userId: req.userId });
+    logger.error('Profile fetch error', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -166,7 +166,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
   try {
     // Check if user is a demo user
     if (req.user.isDemoUser()) {
-      logger.warn('Demo user attempted profile update', { userId: req.userId });
+      logger.warn('Demo user attempted profile update', { userId: req.user.id });
       return res.status(403).json({
         success: false,
         error: {
@@ -229,7 +229,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     // Update user
     await req.user.update(updateData);
 
-    logger.info('User profile updated', { userId: req.userId });
+    logger.info('User profile updated', { userId: req.user.id });
 
     res.json({
       success: true,
@@ -240,7 +240,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Profile update error', { error: error.message, userId: req.userId });
+    logger.error('Profile update error', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -257,7 +257,7 @@ router.put('/change-password', authenticateToken, async (req, res) => {
   try {
     // Check if user is a demo user
     if (req.user.isDemoUser()) {
-      logger.warn('Demo user attempted password change', { userId: req.userId });
+      logger.warn('Demo user attempted password change', { userId: req.user.id });
       return res.status(403).json({
         success: false,
         error: {
@@ -333,7 +333,7 @@ router.put('/change-password', authenticateToken, async (req, res) => {
     // Verify current password
     const isValidPassword = await req.user.verifyPassword(currentPassword);
     if (!isValidPassword) {
-      logger.warn('Invalid current password provided for password change', { userId: req.userId });
+      logger.warn('Invalid current password provided for password change', { userId: req.user.id });
       return res.status(401).json({
         success: false,
         error: {
@@ -360,7 +360,7 @@ router.put('/change-password', authenticateToken, async (req, res) => {
     // Update password
     await req.user.updatePassword(newPassword);
 
-    logger.info('User password changed successfully', { userId: req.userId });
+    logger.info('User password changed successfully', { userId: req.user.id });
 
     res.json({
       success: true,
@@ -368,7 +368,7 @@ router.put('/change-password', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Password change error', { error: error.message, userId: req.userId });
+    logger.error('Password change error', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -412,9 +412,9 @@ router.post('/refresh', async (req, res) => {
       });
     }
 
-    // Generate new tokens
-    const newToken = generateToken(user.id);
-    const newRefreshToken = generateRefreshToken(user.id);
+    // Generate new tokens (maintain same expiration as original)
+    const newToken = generateToken(user.id, false);
+    const newRefreshToken = generateRefreshToken(user.id, false);
 
     logger.info('Token refreshed', { userId: user.id });
 

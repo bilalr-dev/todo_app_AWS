@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { todosAPI } from '../services/api';
-import { useAuth } from './AuthContext';
+import { useAuth } from './AuthProvider';
 import { useToast } from './ToastContext';
 
 // Initial state
@@ -106,11 +106,11 @@ const todoReducer = (state, action) => {
       // Recalculate stats based on updated todos
       const newStats = {
         total: updatedTodos.length,
-        completed: updatedTodos.filter(todo => todo.completed || todo.state === 'complete').length,
-        pending: updatedTodos.filter(todo => todo.state === 'inProgress').length,
+        completed: updatedTodos.filter(todo => todo.status === 'completed').length,
+        pending: updatedTodos.filter(todo => todo.status === 'in_progress').length,
         high_priority: updatedTodos.filter(todo => todo.priority === 'high').length,
         overdue: updatedTodos.filter(todo => {
-          if (!todo.due_date || todo.completed || todo.state === 'complete') return false;
+          if (!todo.due_date || todo.status === 'completed') return false;
           const dueDate = new Date(todo.due_date);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -144,7 +144,7 @@ const todoReducer = (state, action) => {
           ? { 
               ...todo, 
               completed: action.payload.completed,
-              state: action.payload.state || (action.payload.completed ? 'complete' : 'inProgress')
+              status: action.payload.status || 'pending'
             }
           : todo
       );
@@ -152,11 +152,11 @@ const todoReducer = (state, action) => {
       // Recalculate stats based on updated todos
       const toggleStats = {
         total: toggledTodos.length,
-        completed: toggledTodos.filter(todo => todo.completed || todo.state === 'complete').length,
-        pending: toggledTodos.filter(todo => todo.state === 'inProgress').length,
+        completed: toggledTodos.filter(todo => todo.status === 'completed').length,
+        pending: toggledTodos.filter(todo => todo.status === 'in_progress').length,
         high_priority: toggledTodos.filter(todo => todo.priority === 'high').length,
         overdue: toggledTodos.filter(todo => {
-          if (!todo.due_date || todo.completed || todo.state === 'complete') return false;
+          if (!todo.due_date || todo.status === 'completed') return false;
           const dueDate = new Date(todo.due_date);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -412,7 +412,7 @@ export const TodoProvider = ({ children }) => {
         });
       }
     } catch (error) {
-      console.error('Failed to load stats:', error);
+      // Stats loading failure is not critical, continue without stats
     }
   }, [dispatch]);
 
@@ -430,7 +430,7 @@ export const TodoProvider = ({ children }) => {
         }
         
         if (showNotification) {
-          showToast('Todo created successfully!', 'success');
+          showToast('To Do created successfully!', 'success');
         }
         return { success: true };
       } else {
@@ -457,7 +457,7 @@ export const TodoProvider = ({ children }) => {
         }
         
         if (showNotification) {
-          showToast('Todo updated successfully!', 'success');
+          showToast('To Do updated successfully!', 'success');
         }
         return { success: true };
       } else {
@@ -482,7 +482,7 @@ export const TodoProvider = ({ children }) => {
           payload: id,
         });
         
-        showToast('Todo deleted successfully!', 'success');
+        showToast('To Do deleted successfully!', 'success');
         return { success: true };
       } else {
         showToast(response.error?.message || 'Failed to delete todo', 'error');
@@ -539,10 +539,10 @@ export const TodoProvider = ({ children }) => {
           let updateData = {};
           
           if (operation === 'complete') {
-            updateData = { completed: true, state: 'complete' };
+            updateData = { status: 'completed' };
           } else if (operation === 'in-progress') {
-            // Set state to inProgress for todos moved to in-progress
-            updateData = { completed: false, state: 'inProgress' };
+            // Set status to in_progress for todos moved to in-progress
+            updateData = { status: 'in_progress' };
           } else if (operation === 'priority') {
             updateData = { priority: data.priority };
           } else if (operation === 'category') {
@@ -584,10 +584,10 @@ export const TodoProvider = ({ children }) => {
       let updateData = {};
       
       if (operation === 'complete') {
-        updateData = { completed: true, state: 'complete' };
+        updateData = { status: 'completed' };
       } else if (operation === 'in-progress') {
-        // Set state to inProgress for todos moved to in-progress
-        updateData = { completed: false, state: 'inProgress' };
+        // Set status to in_progress for todos moved to in-progress
+        updateData = { status: 'in_progress' };
       } else if (operation === 'priority') {
         updateData = { priority: data.priority };
       } else if (operation === 'category') {

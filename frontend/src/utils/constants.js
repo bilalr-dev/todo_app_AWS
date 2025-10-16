@@ -79,7 +79,6 @@ export const TODO_CONFIG = {
       { value: 'tomorrow', label: 'Tomorrow' },
       { value: 'this_week', label: 'This Week' },
       { value: 'overdue', label: 'Overdue' },
-      { value: 'no_date', label: 'No Date' },
     ],
   },
   

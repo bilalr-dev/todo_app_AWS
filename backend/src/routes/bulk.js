@@ -1,7 +1,7 @@
-// Bulk operations routes for v0.6
+// Bulk operations routes for v0.6 - Optimized Architecture
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
-const Todo = require('../models/Todo');
+const TodoService = require('../services/TodoService');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
@@ -27,7 +27,7 @@ router.patch('/todos', authenticateToken, async (req, res) => {
     }
 
     // Validate allowed update fields
-    const allowedFields = ['priority', 'category', 'completed', 'due_date', 'state'];
+    const allowedFields = ['priority', 'category', 'status', 'due_date'];
     const updateFields = Object.keys(updates).filter(field => allowedFields.includes(field));
     
     if (updateFields.length === 0) {
@@ -37,38 +37,20 @@ router.patch('/todos', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify all todos belong to the user
-    const { query } = require('../config/database');
-    const verifyResult = await query(
-      `SELECT id FROM todos WHERE id = ANY($1) AND user_id = $2`,
-      [todoIds, userId]
-    );
+    // Verify all todos belong to the user and perform bulk update
+    const validUpdates = {};
+    updateFields.forEach(field => {
+      validUpdates[field] = updates[field];
+    });
 
-    if (verifyResult.rows.length !== todoIds.length) {
-      return res.status(403).json({
-        success: false,
-        message: 'Some todos do not belong to you or do not exist'
-      });
-    }
+    const result = await TodoService.bulkUpdate(todoIds, validUpdates);
 
-    // Build update query
-    const setClause = updateFields.map((field, index) => `${field} = $${index + 3}`).join(', ');
-    const params = [todoIds, userId, ...updateFields.map(field => updates[field])];
-
-    const result = await query(
-      `UPDATE todos 
-       SET ${setClause}, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ANY($1) AND user_id = $2
-       RETURNING id, title, ${updateFields.join(', ')}, updated_at`,
-      params
-    );
-
-    logger.info(`Bulk update completed: ${result.rows.length} todos updated by user ${userId}`);
+    logger.info(`Bulk update completed: ${result.length} todos updated by user ${userId}`);
 
     res.json({
       success: true,
-      message: `${result.rows.length} todos updated successfully`,
-      updatedTodos: result.rows,
+      message: `${result.length} todos updated successfully`,
+      updatedTodos: result,
       updateFields
     });
   } catch (error) {
@@ -94,33 +76,15 @@ router.delete('/todos', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify all todos belong to the user
-    const { query } = require('../config/database');
-    const verifyResult = await query(
-      `SELECT id, title FROM todos WHERE id = ANY($1) AND user_id = $2`,
-      [todoIds, userId]
-    );
+    // Perform bulk delete
+    const deletedCount = await TodoService.bulkDelete(todoIds);
 
-    if (verifyResult.rows.length !== todoIds.length) {
-      return res.status(403).json({
-        success: false,
-        message: 'Some todos do not belong to you or do not exist'
-      });
-    }
-
-    // Delete todos (cascade will handle file attachments)
-    const result = await query(
-      `DELETE FROM todos WHERE id = ANY($1) AND user_id = $2
-       RETURNING id, title`,
-      [todoIds, userId]
-    );
-
-    logger.info(`Bulk delete completed: ${result.rows.length} todos deleted by user ${userId}`);
+    logger.info(`Bulk delete completed: ${deletedCount} todos deleted by user ${userId}`);
 
     res.json({
       success: true,
-      message: `${result.rows.length} todos deleted successfully`,
-      deletedTodos: result.rows
+      message: `${deletedCount} todos deleted successfully`,
+      deletedCount
     });
   } catch (error) {
     logger.error('Error in bulk delete:', error);
@@ -132,12 +96,13 @@ router.delete('/todos', authenticateToken, async (req, res) => {
   }
 });
 
-// Bulk mark as completed
-router.patch('/todos/complete', authenticateToken, async (req, res) => {
+// Bulk update todo state (unified route for all states)
+router.patch('/todos/state', authenticateToken, async (req, res) => {
   try {
-    const { todoIds } = req.body;
+    const { todoIds, state } = req.body;
     const userId = req.user.id;
 
+    // Validate input
     if (!todoIds || !Array.isArray(todoIds) || todoIds.length === 0) {
       return res.status(400).json({
         success: false,
@@ -145,63 +110,17 @@ router.patch('/todos/complete', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify all todos belong to the user
-    const { query } = require('../config/database');
-    const verifyResult = await query(
-      `SELECT id FROM todos WHERE id = ANY($1) AND user_id = $2`,
-      [todoIds, userId]
-    );
-
-    if (verifyResult.rows.length !== todoIds.length) {
-      return res.status(403).json({
-        success: false,
-        message: 'Some todos do not belong to you or do not exist'
-      });
-    }
-
-          // Mark todos as completed
-          const result = await query(
-            `UPDATE todos 
-             SET completed = true, state = 'complete', updated_at = CURRENT_TIMESTAMP
-             WHERE id = ANY($1) AND user_id = $2
-             RETURNING id, title, completed, state, updated_at`,
-            [todoIds, userId]
-          );
-
-    logger.info(`Bulk complete: ${result.rows.length} todos marked as completed by user ${userId}`);
-
-    res.json({
-      success: true,
-      message: `${result.rows.length} todos marked as completed`,
-      completedTodos: result.rows
-    });
-  } catch (error) {
-    logger.error('Error in bulk complete:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error completing todos',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
-
-// Bulk mark as pending
-router.patch('/todos/pending', authenticateToken, async (req, res) => {
-  try {
-    const { todoIds } = req.body;
-    const userId = req.user.id;
-
-    if (!todoIds || !Array.isArray(todoIds) || todoIds.length === 0) {
+    if (!state || !['pending', 'in_progress', 'completed'].includes(state)) {
       return res.status(400).json({
         success: false,
-        message: 'Todo IDs array is required'
+        message: 'Valid state is required (pending, in_progress, or completed)'
       });
     }
 
     // Verify all todos belong to the user and check their current state
     const { query } = require('../config/database');
     const verifyResult = await query(
-      `SELECT id, completed, state FROM todos WHERE id = ANY($1) AND user_id = $2`,
+      `SELECT id, status FROM todos WHERE id = ANY($1) AND user_id = $2`,
       [todoIds, userId]
     );
 
@@ -212,37 +131,71 @@ router.patch('/todos/pending', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if any todos are already completed (forward-only rule)
-    const completedTodos = verifyResult.rows.filter(todo => todo.completed || todo.state === 'complete');
-    if (completedTodos.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot move completed todos to in-progress - forward-only movement is enforced',
-        completedTodoIds: completedTodos.map(t => t.id)
-      });
+    // Forward-only movement validation
+    if (state !== 'completed') {
+      const completedTodos = verifyResult.rows.filter(todo => todo.status === 'completed');
+      if (completedTodos.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot move completed todos to ${state} - forward-only movement is enforced`,
+          completedTodoIds: completedTodos.map(t => t.id)
+        });
+      }
     }
 
-    // Mark todos as pending (in-progress) - only non-completed todos
-    const result = await query(
-      `UPDATE todos 
-       SET completed = false, state = 'inProgress', updated_at = CURRENT_TIMESTAMP
-       WHERE id = ANY($1) AND user_id = $2 AND (completed = false OR state != 'complete')
-       RETURNING id, title, completed, state, updated_at`,
-      [todoIds, userId]
-    );
+    // Build the update query based on the target state
+    let updateQuery;
+    let queryParams;
+    let logMessage;
+    let responseField;
 
-    logger.info(`Bulk pending: ${result.rows.length} todos marked as pending by user ${userId}`);
+    switch (state) {
+      case 'completed':
+        updateQuery = `UPDATE todos 
+                      SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                      WHERE id = ANY($1) AND user_id = $2
+                      RETURNING *`;
+        queryParams = [todoIds, userId];
+        logMessage = `Bulk complete: ${todoIds.length} todos marked as completed by user ${userId}`;
+        responseField = 'completedTodos';
+        break;
+
+      case 'in_progress':
+        updateQuery = `UPDATE todos 
+                      SET status = 'in_progress', started_at = CASE WHEN started_at IS NULL THEN CURRENT_TIMESTAMP ELSE started_at END, updated_at = CURRENT_TIMESTAMP
+                      WHERE id = ANY($1) AND user_id = $2 AND status != 'completed'
+                      RETURNING *`;
+        queryParams = [todoIds, userId];
+        logMessage = `Bulk in-progress: ${todoIds.length} todos marked as in-progress by user ${userId}`;
+        responseField = 'inProgressTodos';
+        break;
+
+      case 'pending':
+        updateQuery = `UPDATE todos 
+                      SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+                      WHERE id = ANY($1) AND user_id = $2 AND status != 'completed'
+                      RETURNING *`;
+        queryParams = [todoIds, userId];
+        logMessage = `Bulk pending: ${todoIds.length} todos marked as pending by user ${userId}`;
+        responseField = 'pendingTodos';
+        break;
+    }
+
+    // Execute the update
+    const result = await query(updateQuery, queryParams);
+
+    logger.info(logMessage);
 
     res.json({
       success: true,
-      message: `${result.rows.length} todos marked as pending`,
-      pendingTodos: result.rows
+      message: `${result.rows.length} todos marked as ${state}`,
+      [responseField]: result.rows
     });
   } catch (error) {
-    logger.error('Error in bulk pending:', error);
+    logger.error(`Error in bulk state update to ${req.body.state}:`, error);
     res.status(500).json({
       success: false,
-      message: 'Error marking todos as pending',
+      message: `Error updating todos to ${req.body.state}`,
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
@@ -287,7 +240,7 @@ router.patch('/todos/priority', authenticateToken, async (req, res) => {
       `UPDATE todos 
        SET priority = $3, updated_at = CURRENT_TIMESTAMP
        WHERE id = ANY($1) AND user_id = $2
-       RETURNING id, title, priority, updated_at`,
+       RETURNING *`,
       [todoIds, userId, priority]
     );
 
@@ -347,7 +300,7 @@ router.patch('/todos/category', authenticateToken, async (req, res) => {
       `UPDATE todos 
        SET category = $3, updated_at = CURRENT_TIMESTAMP
        WHERE id = ANY($1) AND user_id = $2
-       RETURNING id, title, category, updated_at`,
+       RETURNING *`,
       [todoIds, userId, category.trim()]
     );
 

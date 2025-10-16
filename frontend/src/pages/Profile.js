@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
+import { useTodos } from '../context/TodoProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
-import { User, Mail, Calendar, Save, Edit3, Sun, Moon } from 'lucide-react';
+import { User, Mail, Calendar, Save, Edit3, Sun, Moon, Download } from 'lucide-react';
+import { formatDate } from '../utils/helpers';
+import { exportData } from '../utils/exportUtils';
 
 const Profile = () => {
   const { user, updateProfile, changePassword } = useAuth();
   const { theme, setThemeMode } = useTheme();
+  const { todos } = useTodos();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     username: user?.username || '',
@@ -53,7 +57,7 @@ const Profile = () => {
         setIsEditing(false);
       }
     } catch (error) {
-      console.error('Profile update error:', error);
+      // Error handling is done by the updateProfile method
     } finally {
       setIsSubmitting(false);
     }
@@ -65,6 +69,21 @@ const Profile = () => {
       email: user?.email || '',
     });
     setIsEditing(false);
+  };
+
+  // Comprehensive export functionality - exports everything (todos + account data)
+  const handleExportAllData = () => {
+    const result = exportData({
+      todos: todos,
+      user: user,
+      exportType: 'complete'
+    });
+
+    if (result.success) {
+      alert(result.message);
+    } else {
+      alert(result.message);
+    }
   };
 
   const handlePasswordInputChange = (e) => {
@@ -104,7 +123,7 @@ const Profile = () => {
         setShowChangePassword(false);
       }
     } catch (error) {
-      console.error('Password change error:', error);
+      // Error handling is done by the changePassword method
     } finally {
       setIsChangingPassword(false);
     }
@@ -228,7 +247,7 @@ const Profile = () => {
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Member since:</span>
                     <span className="text-foreground">
-                      {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+                      {user?.created_at ? formatDate(user.created_at) : 'N/A'}
                     </span>
                   </div>
                   
@@ -448,16 +467,18 @@ const Profile = () => {
                     <div>
                       <h4 className="font-medium text-foreground">Data Export</h4>
                       <p className="text-sm text-muted-foreground">
-                        {isDemoUser ? "Data export is disabled for demo users" : "Download your todos and account data"}
+                        {isDemoUser ? "Data export is disabled for demo users" : "Download your complete data (todos + account info)"}
                       </p>
                     </div>
                     <Button 
                       variant="outline" 
                       size="sm"
                       disabled={isDemoUser}
-                      title={isDemoUser ? "Data export is disabled for demo users" : ""}
+                      onClick={handleExportAllData}
+                      title={isDemoUser ? "Data export is disabled for demo users" : "Export all your data including todos and account information"}
                     >
-                      Export Data
+                      <Download className="h-4 w-4 mr-2" />
+                      Export All Data
                     </Button>
                   </div>
                 </div>

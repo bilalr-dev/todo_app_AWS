@@ -65,7 +65,7 @@ export const ToastProvider = ({ children }) => {
   const [state, dispatch] = useReducer(toastReducer, initialState);
 
   // Add toast function
-  const addToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 5000) => {
+  const addToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 3000) => {
     const id = Date.now() + Math.random();
     
     const toast = {
@@ -81,15 +81,8 @@ export const ToastProvider = ({ children }) => {
       payload: toast,
     });
 
-    // Auto remove toast after duration
-    if (duration > 0) {
-      setTimeout(() => {
-        dispatch({
-          type: TOAST_ACTIONS.REMOVE_TOAST,
-          payload: id,
-        });
-      }, duration);
-    }
+    // Note: Auto-removal is now handled by the Toast component itself
+    // to allow for proper exit animations
 
     return id;
   }, []);
@@ -108,23 +101,23 @@ export const ToastProvider = ({ children }) => {
   }, []);
 
   // Convenience methods
-  const showToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 5000) => {
+  const showToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 3000) => {
     return addToast(message, type, duration);
   }, [addToast]);
 
-  const showSuccess = useCallback((message, duration = 5000) => {
+  const showSuccess = useCallback((message, duration = 3000) => {
     return addToast(message, TOAST_TYPES.SUCCESS, duration);
   }, [addToast]);
 
-  const showError = useCallback((message, duration = 7000) => {
+  const showError = useCallback((message, duration = 5000) => {
     return addToast(message, TOAST_TYPES.ERROR, duration);
   }, [addToast]);
 
-  const showWarning = useCallback((message, duration = 6000) => {
+  const showWarning = useCallback((message, duration = 4000) => {
     return addToast(message, TOAST_TYPES.WARNING, duration);
   }, [addToast]);
 
-  const showInfo = useCallback((message, duration = 5000) => {
+  const showInfo = useCallback((message, duration = 3000) => {
     return addToast(message, TOAST_TYPES.INFO, duration);
   }, [addToast]);
 

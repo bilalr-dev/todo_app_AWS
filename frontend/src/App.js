@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { TodoProvider } from './context/TodoContext';
+import { AuthProvider } from './context/AuthProvider';
+import { TodoProvider } from './context/TodoProvider';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 

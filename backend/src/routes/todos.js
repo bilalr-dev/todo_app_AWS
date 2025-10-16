@@ -1,6 +1,7 @@
-// Todo management routes for v0.5
+// Todo management routes for v0.6 - Optimized Architecture
 const express = require('express');
 const Todo = require('../models/Todo');
+const TodoService = require('../services/TodoService');
 const { authenticateToken } = require('../middleware/auth');
 const { 
   validateTodoCreation, 
@@ -16,7 +17,7 @@ const router = express.Router();
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
-      completed, 
+      status, 
       priority, 
       category, 
       limit = 50, 
@@ -26,7 +27,7 @@ router.get('/', authenticateToken, async (req, res) => {
     } = req.query;
 
     const options = {
-      completed: completed !== undefined ? completed === 'true' : undefined,
+      status,
       priority,
       category,
       limit: parseInt(limit),
@@ -35,7 +36,7 @@ router.get('/', authenticateToken, async (req, res) => {
       orderDirection: orderDirection.toUpperCase()
     };
 
-    const { todos, pagination } = await Todo.findWithAttachments(req.userId, {
+    const { todos, pagination } = await Todo.findWithAttachments(req.user.id, {
       page: Math.floor(offset / limit) + 1,
       limit,
       sortBy: orderBy,
@@ -43,7 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
     });
     const total = pagination.total;
 
-    logger.info('Todos fetched', { userId: req.userId, count: todos.length });
+    logger.info('Todos fetched', { userId: req.user.id, count: todos.length });
 
     res.json({
       success: true,
@@ -59,7 +60,7 @@ router.get('/', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error fetching todos', { error: error.message, userId: req.userId });
+    logger.error('Error fetching todos', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -74,9 +75,9 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get todo statistics
 router.get('/stats', authenticateToken, async (req, res) => {
   try {
-    const stats = await Todo.getStats(req.userId);
+    const stats = await TodoService.getStats(req.user.id);
 
-    logger.info('Todo stats fetched', { userId: req.userId });
+    logger.info('Todo stats fetched', { userId: req.user.id });
 
     res.json({
       success: true,
@@ -84,7 +85,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error fetching todo stats', { error: error.message, userId: req.userId });
+    logger.error('Error fetching todo stats', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -126,7 +127,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns this todo
-    if (todo.user_id !== req.userId) {
+    if (todo.user_id !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: {
@@ -137,7 +138,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    logger.info('Todo fetched', { todoId, userId: req.userId });
+    logger.info('Todo fetched', { todoId, userId: req.user.id });
 
     res.json({
       success: true,
@@ -145,7 +146,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error fetching todo', { error: error.message, todoId: req.params.id, userId: req.userId });
+    logger.error('Error fetching todo', { error: error.message, todoId: req.params.id, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -162,16 +163,16 @@ router.post('/', authenticateToken, validateTodoCreation, async (req, res) => {
   try {
     const todoData = {
       ...req.body,
-      user_id: req.userId
+      user_id: req.user.id
     };
 
-    const todo = await Todo.create(todoData);
+    const todo = await TodoService.createTodo(todoData);
     
     // Fetch attachments for the created todo
     const attachments = await todo.getAttachments();
     todo.attachments = attachments;
 
-    logger.info('Todo created', { todoId: todo.id, userId: req.userId });
+    logger.info('Todo created', { todoId: todo.id, userId: req.user.id });
 
     res.status(201).json({
       success: true,
@@ -180,7 +181,7 @@ router.post('/', authenticateToken, validateTodoCreation, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error creating todo', { error: error.message, userId: req.userId });
+    logger.error('Error creating todo', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -222,7 +223,7 @@ router.put('/:id', authenticateToken, validateTodoUpdate, async (req, res) => {
     }
 
     // Check if user owns this todo
-    if (todo.user_id !== req.userId) {
+    if (todo.user_id !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: {
@@ -233,22 +234,22 @@ router.put('/:id', authenticateToken, validateTodoUpdate, async (req, res) => {
       });
     }
 
-    await todo.update(req.body);
+    const updatedTodo = await TodoService.updateTodo(todoId, req.body);
     
     // Fetch attachments for the updated todo
-    const attachments = await todo.getAttachments();
-    todo.attachments = attachments;
+    const attachments = await updatedTodo.getAttachments();
+    updatedTodo.attachments = attachments;
 
-    logger.info('Todo updated', { todoId, userId: req.userId });
+    logger.info('Todo updated', { todoId, userId: req.user.id });
 
     res.json({
       success: true,
       message: 'Todo updated successfully',
-      data: { todo },
+      data: { todo: updatedTodo },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error updating todo', { error: error.message, todoId: req.params.id, userId: req.userId });
+    logger.error('Error updating todo', { error: error.message, todoId: req.params.id, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -290,7 +291,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns this todo
-    if (todo.user_id !== req.userId) {
+    if (todo.user_id !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: {
@@ -301,9 +302,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    await todo.delete();
+    await TodoService.deleteTodo(todoId);
 
-    logger.info('Todo deleted', { todoId, userId: req.userId });
+    logger.info('Todo deleted', { todoId, userId: req.user.id });
 
     res.json({
       success: true,
@@ -311,7 +312,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error deleting todo', { error: error.message, todoId: req.params.id, userId: req.userId });
+    logger.error('Error deleting todo', { error: error.message, todoId: req.params.id, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -353,7 +354,7 @@ router.patch('/:id/toggle', authenticateToken, async (req, res) => {
     }
 
     // Check if user owns this todo
-    if (todo.user_id !== req.userId) {
+    if (todo.user_id !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: {
@@ -364,18 +365,18 @@ router.patch('/:id/toggle', authenticateToken, async (req, res) => {
       });
     }
 
-    await todo.toggleComplete();
+    const updatedTodo = await TodoService.toggleComplete(todoId);
 
-    logger.info('Todo completion toggled', { todoId, userId: req.userId, completed: todo.completed });
+    logger.info('Todo completion toggled', { todoId, userId: req.user.id, status: updatedTodo.status });
 
     res.json({
       success: true,
       message: 'Todo completion status updated',
-      data: { todo },
+      data: { todo: updatedTodo },
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error toggling todo completion', { error: error.message, todoId: req.params.id, userId: req.userId });
+    logger.error('Error toggling todo completion', { error: error.message, todoId: req.params.id, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -392,9 +393,9 @@ router.post('/search', authenticateToken, validateSearch, async (req, res) => {
   try {
     const { query, limit = 50, offset = 0 } = req.body;
 
-    const todos = await Todo.search(req.userId, query, { limit, offset });
+    const todos = await Todo.search(req.user.id, query, { limit, offset });
 
-    logger.info('Todos searched', { userId: req.userId, query, count: todos.length });
+    logger.info('Todos searched', { userId: req.user.id, query, count: todos.length });
 
     res.json({
       success: true,
@@ -410,7 +411,7 @@ router.post('/search', authenticateToken, validateSearch, async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error searching todos', { error: error.message, userId: req.userId });
+    logger.error('Error searching todos', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
@@ -429,7 +430,7 @@ router.post('/bulk', authenticateToken, validateBulkOperations, async (req, res)
 
     // Verify all todos belong to the user
     const todos = await Promise.all(todoIds.map(id => Todo.findById(id)));
-    const invalidTodos = todos.filter(todo => !todo || todo.user_id !== req.userId);
+    const invalidTodos = todos.filter(todo => !todo || todo.user_id !== req.user.id);
     
     if (invalidTodos.length > 0) {
       return res.status(403).json({
@@ -445,16 +446,16 @@ router.post('/bulk', authenticateToken, validateBulkOperations, async (req, res)
     let result;
     switch (operation) {
       case 'delete':
-        result = await Todo.bulkDelete(todoIds);
+        result = await TodoService.bulkDelete(todoIds);
         break;
       case 'complete':
-        result = await Todo.bulkUpdate(todoIds, { completed: true });
+        result = await TodoService.bulkUpdate(todoIds, { status: 'completed' });
         break;
       case 'uncomplete':
-        result = await Todo.bulkUpdate(todoIds, { completed: false });
+        result = await TodoService.bulkUpdate(todoIds, { status: 'pending' });
         break;
       case 'update':
-        result = await Todo.bulkUpdate(todoIds, updateData);
+        result = await TodoService.bulkUpdate(todoIds, updateData);
         break;
       default:
         return res.status(400).json({
@@ -467,7 +468,7 @@ router.post('/bulk', authenticateToken, validateBulkOperations, async (req, res)
         });
     }
 
-    logger.info('Bulk operation completed', { userId: req.userId, operation, count: todoIds.length });
+    logger.info('Bulk operation completed', { userId: req.user.id, operation, count: todoIds.length });
 
     res.json({
       success: true,
@@ -480,7 +481,7 @@ router.post('/bulk', authenticateToken, validateBulkOperations, async (req, res)
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error in bulk operation', { error: error.message, userId: req.userId });
+    logger.error('Error in bulk operation', { error: error.message, userId: req.user.id });
     res.status(500).json({
       success: false,
       error: {
