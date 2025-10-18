@@ -7,7 +7,8 @@ const { logger } = require('../utils/logger');
 // Configure storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../../uploads');
+    // Use __dirname to get the current directory (backend/src/middleware), then go up to backend and navigate to uploads
+    const uploadPath = path.join(__dirname, '..', '..', 'uploads');
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {

@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthProvider';
 import { useTheme } from '../context/ThemeContext';
-import { useTodos } from '../context/TodoProvider';
+import { useTodos } from '../context/TodoContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -15,7 +15,6 @@ const Profile = () => {
   const { todos } = useTodos();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    username: user?.username || '',
     email: user?.email || '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +25,15 @@ const Profile = () => {
     confirmPassword: '',
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Sync user changes to form data
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        email: user.email || '',
+      });
+    }
+  }, [user]);
 
   // Check if user is a demo user
   const isDemoUser = useMemo(() => {
@@ -55,6 +63,8 @@ const Profile = () => {
       const result = await updateProfile(formData);
       if (result.success) {
         setIsEditing(false);
+        // Refresh the page after successful save
+        window.location.reload();
       }
     } catch (error) {
       // Error handling is done by the updateProfile method
@@ -65,7 +75,6 @@ const Profile = () => {
 
   const handleCancel = () => {
     setFormData({
-      username: user?.username || '',
       email: user?.email || '',
     });
     setIsEditing(false);
@@ -136,6 +145,16 @@ const Profile = () => {
       confirmPassword: '',
     });
     setShowChangePassword(false);
+  };
+
+  const handleShowChangePassword = () => {
+    // Clear password data when opening the form for security
+    setPasswordData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    setShowChangePassword(true);
   };
 
   return (
@@ -219,12 +238,10 @@ const Profile = () => {
               <div className="space-y-4">
                 <Input
                   label="Username"
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  name="username"
+                  value={user?.username || ''}
                   leftIcon={<User className="h-4 w-4" />}
-                  disabled={!isEditing || isDemoUser}
-                  helperText={isDemoUser ? "Username cannot be changed for demo users" : "This will be visible to other users"}
+                  disabled={true}
+                  helperText="Username cannot be changed"
                 />
                 
                 <Input
@@ -309,7 +326,7 @@ const Profile = () => {
                         variant="outline" 
                         size="sm"
                         disabled={isDemoUser}
-                        onClick={() => setShowChangePassword(!showChangePassword)}
+                        onClick={() => showChangePassword ? setShowChangePassword(false) : handleShowChangePassword()}
                         title={isDemoUser ? "Password changes are disabled for demo users" : ""}
                       >
                         {showChangePassword ? 'Cancel' : 'Change Password'}
@@ -318,6 +335,20 @@ const Profile = () => {
                     
                     {showChangePassword && !isDemoUser && (
                       <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        {/* Hidden dummy fields to prevent password manager auto-fill */}
+                        <input 
+                          type="password" 
+                          style={{ display: 'none' }} 
+                          autoComplete="username"
+                          tabIndex={-1}
+                        />
+                        <input 
+                          type="password" 
+                          style={{ display: 'none' }} 
+                          autoComplete="current-password"
+                          tabIndex={-1}
+                        />
+                        
                         <div>
                           <label htmlFor="currentPassword" className="block text-sm font-medium text-foreground mb-2">
                             Current Password
@@ -330,6 +361,8 @@ const Profile = () => {
                             onChange={handlePasswordInputChange}
                             placeholder="Enter current password"
                             className="w-full"
+                            autoComplete="new-password"
+                            data-form-type="other"
                           />
                         </div>
                         

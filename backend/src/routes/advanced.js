@@ -10,6 +10,9 @@ const router = express.Router();
 router.get('/search', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('Advanced search request - userId:', userId);
+    console.log('Advanced search request - query params:', req.query);
+    
     const {
       search = null,
       priorities = null,
@@ -277,7 +280,7 @@ router.get('/analytics', authenticateToken, async (req, res) => {
       `SELECT 
          DATE(created_at) as date,
          COUNT(*) as total_created,
-         COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed
+         COUNT(CASE WHEN state = 'completed' THEN 1 END) as completed
        FROM todos 
        WHERE user_id = $1 ${dateFilter}
        GROUP BY DATE(created_at)

@@ -8,6 +8,7 @@ const { logger } = require('../utils/logger');
 
 const router = express.Router();
 
+
 // User registration
 router.post('/register', validateUserRegistration, async (req, res) => {
   try {
@@ -164,24 +165,35 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // Update user profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    // Check if user is a demo user
-    if (req.user.isDemoUser()) {
-      logger.warn('Demo user attempted profile update', { userId: req.user.id });
-      return res.status(403).json({
+    // Note: Demo user restriction removed for testing cross-tab sync
+    // if (req.user.isDemoUser()) {
+    //   logger.warn('Demo user attempted profile update', { userId: req.user.id });
+    //   return res.status(403).json({
+    //     success: false,
+    //     error: {
+    //       code: 'DEMO_USER_RESTRICTION',
+    //       message: 'Profile updates are disabled for demo users'
+    //     },
+    //     timestamp: new Date().toISOString()
+    //   });
+    // }
+
+    const { username, email, theme_preference } = req.body;
+    const updateData = {};
+
+    // Username changes are not allowed
+    if (username) {
+      return res.status(400).json({
         success: false,
         error: {
-          code: 'DEMO_USER_RESTRICTION',
-          message: 'Profile updates are disabled for demo users'
+          code: 'USERNAME_CHANGE_DISABLED',
+          message: 'Username cannot be changed'
         },
         timestamp: new Date().toISOString()
       });
     }
 
-    const { username, email, theme_preference } = req.body;
-    const updateData = {};
-
-    // Only update provided fields
-    if (username) updateData.username = username;
+    // Only update provided fields (excluding username)
     if (email) updateData.email = email;
     if (theme_preference) updateData.theme_preference = theme_preference;
 
@@ -211,25 +223,12 @@ router.put('/profile', authenticateToken, async (req, res) => {
       }
     }
 
-    // Check if new username already exists
-    if (username && username !== req.user.username) {
-      const existingUsername = await User.findByUsername(username);
-      if (existingUsername) {
-        return res.status(409).json({
-          success: false,
-          error: {
-            code: 'USERNAME_EXISTS',
-            message: 'Username already taken'
-          },
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
 
     // Update user
     await req.user.update(updateData);
 
     logger.info('User profile updated', { userId: req.user.id });
+
 
     res.json({
       success: true,

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthProvider';
 import { useTheme } from '../../context/ThemeContext';
-import { useTodos } from '../../context/TodoProvider';
+import { useTodos } from '../../context/TodoContext';
+import { useWebSocket } from '../../context/WebSocketContext';
 import { Button } from '../common/Button';
 import {
   Menu,
@@ -22,10 +23,28 @@ import { TODO_CONFIG } from '../../utils/constants';
 import { CategoryBadge } from '../common/Badge';
 
 const Layout = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true); // Start with sidebar open
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Start with sidebar open for desktop, closed for mobile
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [selectedTodo, setSelectedTodo] = useState(null);
+  const { connected } = useWebSocket();
+  const [isIdle, setIsIdle] = useState(false);
+  const [lastActivity, setLastActivity] = useState(Date.now());
+
+  // Set initial sidebar state based on screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      if (window.innerWidth < 768) { // Mobile
+        setSidebarOpen(false);
+      } else { // Desktop
+        setSidebarOpen(true);
+      }
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   const [clearedTodos, setClearedTodos] = useState(() => {
     // Load cleared todos from localStorage on initialization
     try {
@@ -70,7 +89,7 @@ const Layout = () => {
   const urgentTodos = useMemo(() => {
     if (!Array.isArray(todos)) return [];
     const filtered = todos.filter(todo => {
-      if (!todo.due_date || todo.status === 'completed' || todo.priority !== 'high') return false;
+      if (!todo.due_date || (todo.status || todo.state) === 'completed' || todo.priority !== 'high') return false;
       
       // Handle both date string formats (YYYY-MM-DD and full ISO strings)
       let dueDate;
@@ -153,7 +172,8 @@ const Layout = () => {
   // Detect screen size
   useEffect(() => {
     const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+      const mobile = window.innerWidth < 768; // md breakpoint for better mobile experience
+      setIsMobile(mobile);
     };
 
     checkScreenSize();
@@ -204,6 +224,93 @@ const Layout = () => {
       // Silently fail if localStorage is not available
     }
   }, [clearedTodos]);
+
+  // Cross-tab synchronization for notification state
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'seenTodos' && e.newValue) {
+        try {
+          const newSeenTodos = new Set(JSON.parse(e.newValue));
+          setSeenTodos(newSeenTodos);
+        } catch (error) {
+          console.error('Error parsing seenTodos from localStorage:', error);
+        }
+      }
+      
+      if (e.key === 'clearedTodos' && e.newValue) {
+        try {
+          const newClearedTodos = new Set(JSON.parse(e.newValue));
+          setClearedTodos(newClearedTodos);
+        } catch (error) {
+          console.error('Error parsing clearedTodos from localStorage:', error);
+        }
+      }
+    };
+
+    // Listen for storage events (cross-tab synchronization)
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also listen for focus events as a fallback for mobile browsers
+    const handleFocus = () => {
+      try {
+        const savedSeenTodos = localStorage.getItem('seenTodos');
+        if (savedSeenTodos) {
+          const newSeenTodos = new Set(JSON.parse(savedSeenTodos));
+          setSeenTodos(newSeenTodos);
+        }
+        
+        const savedClearedTodos = localStorage.getItem('clearedTodos');
+        if (savedClearedTodos) {
+          const newClearedTodos = new Set(JSON.parse(savedClearedTodos));
+          setClearedTodos(newClearedTodos);
+        }
+      } catch (error) {
+        console.error('Error syncing notification state on focus:', error);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    // Polling mechanism as additional fallback for mobile browsers
+    const pollInterval = setInterval(() => {
+      try {
+        const savedSeenTodos = localStorage.getItem('seenTodos');
+        if (savedSeenTodos) {
+          const newSeenTodos = new Set(JSON.parse(savedSeenTodos));
+          setSeenTodos(prev => {
+            const prevArray = [...prev];
+            const newArray = [...newSeenTodos];
+            if (prevArray.length !== newArray.length || !prevArray.every(id => newArray.includes(id))) {
+              return newSeenTodos;
+            }
+            return prev;
+          });
+        }
+        
+        const savedClearedTodos = localStorage.getItem('clearedTodos');
+        if (savedClearedTodos) {
+          const newClearedTodos = new Set(JSON.parse(savedClearedTodos));
+          setClearedTodos(prev => {
+            const prevArray = [...prev];
+            const newArray = [...newClearedTodos];
+            if (prevArray.length !== newArray.length || !prevArray.every(id => newArray.includes(id))) {
+              return newClearedTodos;
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error('Error syncing notification state via polling:', error);
+      }
+    }, 2000); // Check every 2 seconds
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(pollInterval);
+    };
+  }, []);
 
   // Clean up seen and cleared todos when todos are deleted (not on initial load)
   useEffect(() => {
@@ -420,8 +527,46 @@ const Layout = () => {
     });
   }, [urgentTodos, todos.length]);
 
+  // Idle detection logic
+  useEffect(() => {
+    let idleTimer;
+    const IDLE_TIMEOUT = 120000; // 2 minutes
 
+    const resetIdleTimer = () => {
+      setLastActivity(Date.now());
+      setIsIdle(false);
+      
+      // Clear existing timer
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+      }
+      
+      // Set new timer
+      idleTimer = setTimeout(() => {
+        setIsIdle(true);
+      }, IDLE_TIMEOUT);
+    };
 
+    // Activity event listeners
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    activityEvents.forEach(event => {
+      document.addEventListener(event, resetIdleTimer, true);
+    });
+
+    // Initialize timer
+    resetIdleTimer();
+
+    // Cleanup
+    return () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+      }
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, resetIdleTimer, true);
+      });
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -435,12 +580,10 @@ const Layout = () => {
 
       {/* Sidebar */}
       <div className={cn(
-        "w-64 bg-card border-r border-border transition-all duration-300 ease-in-out",
+        "bg-card border-r border-border transition-all duration-300 ease-in-out",
         isMobile 
-          ? "fixed inset-y-0 left-0 z-50 transform" + (sidebarOpen ? " translate-x-0" : " -translate-x-full")
-          : sidebarOpen 
-            ? "fixed inset-y-0 left-0 z-50" 
-            : "fixed inset-y-0 left-0 z-50 transform -translate-x-full"
+          ? `w-80 fixed inset-y-0 left-0 z-50 transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
+          : `w-64 h-screen fixed inset-y-0 left-0 z-50 transform ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
       )}>
         <div className="flex flex-col h-full">
           {/* Logo */}
@@ -504,7 +647,7 @@ const Layout = () => {
           "fixed top-0 right-0 z-40 bg-background/80 backdrop-blur-sm border-b border-border transition-all duration-300 ease-in-out",
           !isMobile && sidebarOpen ? "left-64" : "left-0"
         )}>
-          <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16 px-3 sm:px-4 md:px-6 lg:px-8">
             <div className="flex items-center space-x-4">
               {!sidebarOpen && (
                 <Button
@@ -518,38 +661,39 @@ const Layout = () => {
               )}
               
               <div className="hidden sm:block">
-                <h1 className="text-xl font-semibold text-foreground">
+                <h1 className="text-lg sm:text-xl font-semibold text-foreground">
                   {navigation.find(item => isActive(item.href))?.name || 'Dashboard'}
                 </h1>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               {/* Dark mode toggle */}
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={toggleTheme}
-                className="icon-button"
+                className="icon-button w-8 h-8 sm:w-10 sm:h-10"
               >
                 {theme === 'dark' ? (
-                  <Sun className="icon-modern-md" />
+                  <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
                 ) : (
-                  <Moon className="icon-modern-md" />
+                  <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
                 )}
               </Button>
+
 
               {/* Notifications */}
               <div className="relative" ref={notificationMenuRef}>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="relative icon-button"
+                  className="relative icon-button w-8 h-8 sm:w-10 sm:h-10"
                   onClick={() => setNotificationMenuOpen(!notificationMenuOpen)}
                 >
-                  <Bell className="icon-modern-md" />
+                  <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
                   {visibleUrgentTodosCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full text-[8px] font-semibold flex items-center justify-center text-white shadow-sm border-2 border-background">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] sm:min-w-[18px] sm:h-[18px] bg-red-500 rounded-full text-[7px] sm:text-[8px] font-semibold flex items-center justify-center text-white shadow-sm border-2 border-background">
                       {visibleUrgentTodosCount > 99 ? '+99' : visibleUrgentTodosCount}
                     </span>
                   )}
@@ -557,7 +701,7 @@ const Layout = () => {
 
                 {/* Notification dropdown menu */}
                 {notificationMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-lg shadow-lg z-50">
+                  <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-card border border-border rounded-lg shadow-lg z-50">
                     <div className="p-4 border-b border-border">
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold text-foreground flex items-center">
@@ -623,20 +767,30 @@ const Layout = () => {
               <div className="relative" ref={profileMenuRef}>
                 <button
                   onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                  className="flex items-center space-x-3 hover:bg-accent rounded-lg p-1 transition-all duration-300 ease-out hover:shadow-md"
+                  className="flex items-center space-x-2 sm:space-x-3 hover:bg-accent rounded-lg p-1 transition-all duration-300 ease-out hover:shadow-md"
                 >
-                  <div className="hidden sm:block text-right">
-                    <p className="text-sm font-medium text-foreground">{user?.username}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  <div className="text-left">
+                    <p className="text-[10px] md:text-sm font-medium text-foreground">{user?.username}</p>
                   </div>
-                  <div className="icon-bg">
-                    <User className="icon-modern-sm text-primary" />
+                  <div className="icon-bg relative">
+                    <User className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    {/* Connected indicator dot */}
+                    {connected && (
+                      <div 
+                        className={`absolute -top-1 -right-1 w-3 h-3 sm:w-3.5 sm:h-3.5 border-2 border-white dark:border-gray-900 rounded-full ${
+                          isIdle 
+                            ? 'bg-yellow-500 animate-pulse' 
+                            : 'bg-green-500 animate-pulse'
+                        }`}
+                        title={isIdle ? 'Connected - Idle (AFK)' : 'Connected to real-time updates'}
+                      ></div>
+                    )}
                   </div>
                 </button>
 
                 {/* Profile dropdown menu */}
                 {profileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
+                  <div className="absolute right-0 mt-2 w-44 sm:w-48 bg-card border border-border rounded-lg shadow-lg z-50">
                     <div className="py-1">
                       <button
                         onClick={() => {
@@ -664,19 +818,29 @@ const Layout = () => {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 pt-16">
+        <main className="flex-1 pt-14 sm:pt-16 pb-16 sm:pb-20">
           <Outlet />
         </main>
+
+        {/* Footer */}
+        <footer className="border-t border-border bg-background/50 backdrop-blur-sm">
+          <div className="px-4 sm:px-6 lg:px-8 py-4">
+            <div className="text-center text-sm text-muted-foreground">
+              <p>Copyright © {new Date().getUTCFullYear()} - All rights reserved Todo Team</p>
+              <p className="mt-1">Designed & Developed by <a href="https://www.linkedin.com/in/bilalrahaoui" target="_blank" rel="noopener noreferrer">Bilal RAHAOUI</a></p>
+            </div>
+          </div>
+        </footer>
       </div>
 
       {/* Todo Details Popup */}
       {selectedTodo && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div ref={todoPopupRef} className="bg-card border border-border rounded-lg shadow-lg max-w-md w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-border">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-3 sm:p-4">
+          <div ref={todoPopupRef} className="bg-card border border-border rounded-lg shadow-lg max-w-md w-full max-h-[85vh] sm:max-h-[80vh] overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-border">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-foreground flex items-center">
-                  <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                <h3 className="text-base sm:text-lg font-semibold text-foreground flex items-center">
+                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-destructive" />
                   Urgent Todo
                 </h3>
                 <Button
@@ -689,7 +853,7 @@ const Layout = () => {
               </div>
             </div>
             
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">Title</h4>
                 <p className="text-foreground font-medium">{selectedTodo.title}</p>

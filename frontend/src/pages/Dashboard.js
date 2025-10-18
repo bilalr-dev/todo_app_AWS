@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useTodos } from '../context/TodoProvider';
+import { useTodos } from '../context/TodoContext';
 import { useAuth } from '../context/AuthProvider';
 import { useToast } from '../context/ToastContext';
+import { getApiUrl } from '../utils/constants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -57,12 +58,14 @@ const Dashboard = () => {
     clearFilters,
     loadTodos,
     setTodos,
-    bulkUpdate,
-    bulkDelete,
+    bulkOperation,
     searchTodos,
     advancedSearch,
     getSearchSuggestions,
+    refreshStats,
   } = useTodos();
+  
+  // Debug logging
   
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -76,7 +79,54 @@ const Dashboard = () => {
   const [advancedFilters, setAdvancedFilters] = useState({});
   const [isAdvancedSearching, setIsAdvancedSearching] = useState(false);
   const [clearAdvancedSearchTrigger, setClearAdvancedSearchTrigger] = useState(0);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'kanban'
+  const [viewMode, setViewMode] = useState(() => {
+    // Initialize from localStorage or default to 'list'
+    return localStorage.getItem('viewMode') || 'list';
+  }); // 'list' or 'kanban'
+
+  // Cross-tab sync for view mode
+  useEffect(() => {
+    // Save to localStorage when viewMode changes
+    localStorage.setItem('viewMode', viewMode);
+  }, [viewMode]);
+
+  // Listen for view mode changes from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'viewMode' && e.newValue && e.newValue !== viewMode) {
+        setViewMode(e.newValue);
+      }
+    };
+
+    // Listen for storage events (cross-tab synchronization)
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also listen for focus events as a fallback for mobile browsers
+    const handleFocus = () => {
+      const savedViewMode = localStorage.getItem('viewMode');
+      if (savedViewMode && savedViewMode !== viewMode) {
+        setViewMode(savedViewMode);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    // Polling mechanism as additional fallback for mobile browsers
+    const pollInterval = setInterval(() => {
+      const savedViewMode = localStorage.getItem('viewMode');
+      if (savedViewMode && savedViewMode !== viewMode) {
+        setViewMode(savedViewMode);
+      }
+    }, 2000); // Check every 2 seconds
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(pollInterval);
+    };
+  }, [viewMode]);
+
   const [newTodo, setNewTodo] = useState({
     title: '',
     description: '',
@@ -91,6 +141,7 @@ const Dashboard = () => {
   const [createdTodoId, setCreatedTodoId] = useState(null);
   const [isCreatingWithFiles, setIsCreatingWithFiles] = useState(false);
   const [isUserCancelling, setIsUserCancelling] = useState(false);
+  const [pendingTodoWithFiles, setPendingTodoWithFiles] = useState(null);
   
   // File upload refs and state
   const fileUploadRef = useRef(null);
@@ -151,11 +202,14 @@ const Dashboard = () => {
   // Helper function to get status badge info
   const getStatusBadgeInfo = (status) => {
     switch (status) {
-      case 'pending':
+      case 'todo':
+      case 'pending': // Backward compatibility
         return { label: 'To Do', variant: 'secondary', className: TODO_COLOR_CLASSES.TODO_BADGE };
-      case 'in_progress':
+      case 'inProgress':
+      case 'in_progress': // Backward compatibility
         return { label: 'In Progress', variant: 'warning', className: TODO_COLOR_CLASSES.IN_PROGRESS_BADGE };
-      case 'completed':
+      case 'complete':
+      case 'completed': // Backward compatibility
         return { label: 'Completed', variant: 'success', className: TODO_COLOR_CLASSES.COMPLETED_BADGE };
       default:
         return { label: 'To Do', variant: 'secondary', className: TODO_COLOR_CLASSES.TODO_BADGE };
@@ -164,10 +218,10 @@ const Dashboard = () => {
 
   // Helper function to get action time info
   const getActionTimeInfo = (todo) => {
-    const { status, created_at, updated_at, started_at, completed_at } = todo;
+    const { status, state, created_at, updated_at, started_at, completed_at } = todo;
     
     // For completed todos, show when they were completed (completed_at or updated_at as fallback)
-    if (status === 'completed') {
+    if ((status || state) === 'complete' || (status || state) === 'completed') {
       return {
         label: 'Completed at:',
         time: completed_at || updated_at
@@ -175,7 +229,7 @@ const Dashboard = () => {
     }
     
     // For in-progress todos, show when they were moved to in-progress (started_at or updated_at as fallback)
-    if (status === 'in_progress') {
+    if ((status || state) === 'inProgress' || (status || state) === 'in_progress') {
       return {
         label: 'Started at:',
         time: started_at || updated_at
@@ -192,6 +246,7 @@ const Dashboard = () => {
   const handleCreateTodo = async (e) => {
     e.preventDefault();
     
+    
     if (!newTodo.title.trim()) return;
     
     try {
@@ -202,25 +257,48 @@ const Dashboard = () => {
       }
       
       // Check if there are files to upload
-      const hasFiles = selectedFiles.length > 0 && fileUploadRef.current;
+      let hasFiles = selectedFiles.length > 0 && fileUploadRef.current;
+      
+      // If we have files but no ref, wait a bit and try again
+      if (selectedFiles.length > 0 && !fileUploadRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (fileUploadRef.current) {
+          hasFiles = true; // Update hasFiles after ref becomes available
+        }
+      }
       
       // Create the todo first (suppress notification and local state update if files will be uploaded)
-      const result = await createTodo(todoData, !hasFiles, !hasFiles);
+      // Add a flag to indicate if this todo is being created with files
+      const todoDataWithFlag = { ...todoData, _createdWithFiles: hasFiles };
+      const result = await createTodo(todoDataWithFlag, true, true); // Always suppress notifications and local state updates
       if (result.success) {
         // Set the created todo ID for file upload
-        setCreatedTodoId(result.todo.id);
+        setCreatedTodoId(result.data.todo.id);
         
         if (hasFiles) {
+          // Store the todo data to add to list after file upload
+          setPendingTodoWithFiles(result.data.todo);
+          
+          // Note: We'll let the WebSocket event add the todo, but we'll track it as pending
+          // The todo will be temporarily hidden from the UI until upload completes
+          
           // FLOW 1: Files to upload - upload them to the created todo
           setIsUploading(true);
           setIsCreatingWithFiles(true);
+          
           try {
+            // Wait a moment for the state to update and FileUpload to re-render with the new todoId
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             // Upload files to the newly created todo
             // Pass the todoId directly to the upload function
-            await fileUploadRef.current.uploadFiles(result.todo.id);
+            await fileUploadRef.current.uploadFiles(result.data.todo.id);
             
             // Show success notification after upload is complete
             showToast('To Do created successfully!', 'success');
+            
+            // Clear the pending todo since it's now visible in the list
+            setPendingTodoWithFiles(null);
             
             // Clear form and close modal (only after file upload is complete)
             setNewTodo({
@@ -241,25 +319,36 @@ const Dashboard = () => {
             
             // Refresh the dashboard to show the new todo with files
             await loadTodos();
+            
+            // Refresh statistics after file upload is complete
+            refreshStats();
           } catch (uploadError) {
             // Check if it's a cancellation (expected) or actual error
             if (uploadError.message === 'Upload cancelled') {
               // Don't reload todos for cancellation - keep existing state
               showToast('Upload cancelled', 'warning');
+              // Refresh statistics even if upload was cancelled
+              refreshStats();
             } else if (uploadError.message === 'Upload cancelled silently') {
               // Silent cancellation - don't show toast, don't reload todos
               // This is handled by the user cancellation logic
+              // Refresh statistics even if upload was cancelled
+              refreshStats();
             } else {
               // Upload failed, but todo was created - show error
               showToast('File upload failed, but todo was created', 'error');
+              // Refresh statistics even if upload failed
+              refreshStats();
             }
           } finally {
             setIsUploading(false);
             setIsCreatingWithFiles(false);
             setIsUserCancelling(false); // Reset the flag
+            // Don't close the form here - it will be closed after successful upload
           }
         } else {
           // FLOW 2: No files to upload, clear form and close modal immediately
+          showToast('To Do created successfully!', 'success');
         setNewTodo({
           title: '',
           description: '',
@@ -274,6 +363,9 @@ const Dashboard = () => {
           fileUploadRef.current.clearFiles();
         }
         setShowNewTodo(false);
+        
+          // Refresh statistics after todo creation (no files)
+          refreshStats();
         }
       }
     } catch (error) {
@@ -418,13 +510,11 @@ const Dashboard = () => {
       if (result.success) {
         // Delete any pending files that were marked for deletion during edit
         if (pendingFileDeletions.size > 0) {
-          const token = localStorage.getItem('token');
-          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-          
+          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
           // Delete all pending files
           const deletePromises = Array.from(pendingFileDeletions).map(async (fileId) => {
             try {
-              const response = await fetch(`${apiUrl}/files/${fileId}`, {
+              const response = await fetch(getApiUrl(`/files/${fileId}`), {
                 method: 'DELETE',
                 headers: {
                   'Authorization': `Bearer ${token}`
@@ -462,11 +552,16 @@ const Dashboard = () => {
               return; // Exit early, don't close the form
             } else {
               // Don't reload todos to prevent file attachments from disappearing
-            setIsUploading(false);
-          }
+              setIsUploading(false);
+              // Refresh statistics even if upload failed
+              refreshStats();
+            }
           }
           // Only set uploading to false if we didn't return early
           setIsUploading(false);
+        } else {
+          // No files to upload, refresh statistics immediately
+          refreshStats();
         }
         
         // Only clear form and close modal after all operations are complete
@@ -517,7 +612,7 @@ const Dashboard = () => {
     if (!dueDate) return { text: 'No due date', className: 'text-muted-foreground' };
     
     // For completed todos, always show the actual date in DD/MM/YYYY format
-    if (todoStatus === 'completed') {
+    if (todoStatus === 'complete' || todoStatus === 'completed') {
       return { 
         text: formatDate(dueDate), 
         className: 'text-gray-700 dark:text-gray-300'
@@ -545,7 +640,7 @@ const Dashboard = () => {
     const todo = filteredTodos.find(t => t.id === todoId);
     
     // Don't allow selection of completed todos
-    if (todo && todo.status === 'completed') {
+    if (todo && (todo.status || todo.state) === 'completed') {
       showToast('Cannot select completed todos for bulk operations', 'warning');
       return;
     }
@@ -591,17 +686,18 @@ const Dashboard = () => {
         return;
       }
 
-      // Determine current column based on todo state
+      // Determine current column based on todo status (consistent with Kanban filtering)
       let currentColumn = 'todo';
-      if (todo.state === 'todo') {
+      const currentStatus = todo.status || todo.state;
+      if (currentStatus === 'pending' || currentStatus === 'todo') {
         currentColumn = 'todo';
-      } else if (todo.state === 'inProgress') {
+      } else if (currentStatus === 'in_progress') {
         currentColumn = 'in-progress';
-      } else if (todo.state === 'complete') {
+      } else if (currentStatus === 'completed') {
         currentColumn = 'complete';
       } else {
-        // Fallback for existing todos without state field
-        currentColumn = todo.status === 'completed' ? 'complete' : 'todo';
+        // Fallback for existing todos without status field
+        currentColumn = 'todo';
       }
 
       // Enforce forward-only movement: Todo → In Progress → Complete
@@ -618,14 +714,16 @@ const Dashboard = () => {
       let updateData = {};
       
       if (targetColumn === 'complete') {
-        updateData = { status: 'completed' };
+        updateData = { state: 'complete' };
       } else if (targetColumn === 'in-progress') {
-        updateData = { status: 'in_progress' };
+        updateData = { state: 'inProgress' };
       } else if (targetColumn === 'todo') {
-        updateData = { status: 'pending' };
+        updateData = { state: 'todo' };
       }
 
       await updateTodo(todoId, updateData, true); // Keep the default "To Do updated successfully!" notification
+      // Refresh statistics after Kanban move
+      refreshStats();
       // Removed the duplicate "Todo moved to [column]" notification
     } catch (error) {
       showToast('Failed to move todo', 'error');
@@ -671,19 +769,19 @@ const Dashboard = () => {
 
       switch (action) {
         case 'complete':
-          result = await bulkUpdate(validTodoIds, { status: 'completed' });
+          result = await bulkOperation('complete', validTodoIds);
           break;
         case 'in-progress':
-          result = await bulkUpdate(validTodoIds, { status: 'in_progress' });
+          result = await bulkOperation('in-progress', validTodoIds);
           break;
         case 'delete':
-          result = await bulkDelete(validTodoIds);
+          result = await bulkOperation('delete', validTodoIds);
           break;
         case 'priority':
-          result = await bulkUpdate(validTodoIds, { priority: data.priority });
+          result = await bulkOperation('priority', validTodoIds, { priority: data.priority });
           break;
         case 'category':
-          result = await bulkUpdate(validTodoIds, { category: data.category });
+          result = await bulkOperation('category', validTodoIds, { category: data.category });
           break;
         case 'export':
           // Handle export separately
@@ -704,9 +802,8 @@ const Dashboard = () => {
 
   const handleExportSelected = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002';
-      const response = await fetch(`${apiUrl}/api/export/todos/json`, {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(getApiUrl('/export/todos/json'), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -770,9 +867,8 @@ const Dashboard = () => {
       setDeletingFiles(prev => new Set(prev).add(fileId));
       
       // Make the DELETE request to the backend
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-      const response = await fetch(`${apiUrl}/files/${fileId}`, {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(getApiUrl(`/files/${fileId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -821,8 +917,14 @@ const Dashboard = () => {
 
   const handleAdvancedFilterChange = useCallback((filters) => {
     setAdvancedFilters(filters);
-    // Trigger search when filters change
+    // Only trigger search if filters are not empty (prevent search on page load)
+    const hasFilters = Object.values(filters).some(value => 
+      value !== null && value !== undefined && value !== '' && 
+      (Array.isArray(value) ? value.length > 0 : true)
+    );
+    if (hasFilters) {
     handleAdvancedSearch(filters);
+    }
   }, [handleAdvancedSearch]);
 
   const clearAdvancedSearch = useCallback(() => {
@@ -833,30 +935,30 @@ const Dashboard = () => {
   }, [loadTodos]);
 
   return (
-    <div className="p-6">
-      <div className="max-w-none mx-[36px]">
+    <div className="p-4 sm:p-6 overflow-x-hidden">
+      <div className="max-w-none mx-0 sm:mx-[36px]">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
             Welcome back, {user?.username}!
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm sm:text-base text-muted-foreground">
             Here's what you need to focus on today
           </p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
           {/* To Do */}
           <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">To Do</p>
-                  <p className="text-2xl font-bold text-warning-600">{Number(stats?.pending || 0)}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">To Do</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-warning-600">{Number(stats?.pending || 0)}</p>
                 </div>
-                <div className="icon-bg bg-yellow-100 dark:bg-yellow-900/30">
-                  <Circle className="icon-modern-lg text-yellow-600 dark:text-yellow-300" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <List className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-600 dark:text-yellow-300" />
                 </div>
               </div>
             </CardContent>
@@ -864,14 +966,14 @@ const Dashboard = () => {
 
           {/* In Progress */}
           <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">In Progress</p>
-                  <p className="text-2xl font-bold text-blue-600">{Number(stats?.in_progress || 0)}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">In Progress</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-purple-600">{Number(stats?.in_progress || 0)}</p>
                 </div>
-                <div className="icon-bg bg-blue-100 dark:bg-blue-900/30">
-                  <Clock className="icon-modern-lg text-blue-600 dark:text-blue-300" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-purple-600 dark:text-purple-300" />
                 </div>
               </div>
             </CardContent>
@@ -879,29 +981,14 @@ const Dashboard = () => {
 
           {/* Completed */}
           <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Completed</p>
-                  <p className="text-2xl font-bold text-success-600">{Number(stats?.completed || 0)}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Completed</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-600">{Number(stats?.completed || 0)}</p>
                 </div>
-                <div className="icon-bg bg-green-100 dark:bg-green-900/30">
-                  <CheckCircle2 className="icon-modern-lg text-green-600 dark:text-green-300" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total */}
-          <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold text-foreground">{Number(stats?.total || 0)}</p>
-                </div>
-                <div className="icon-bg bg-purple-100 dark:bg-purple-900/30">
-                  <ClipboardList className="icon-modern-lg text-purple-600 dark:text-purple-300" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-600 dark:text-green-300" />
                 </div>
               </div>
             </CardContent>
@@ -909,14 +996,29 @@ const Dashboard = () => {
 
           {/* High Priority */}
           <Card className="stats-card-glass transition-all duration-300">
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">High Priority</p>
-                  <p className="text-2xl font-bold text-error-600">{Number(stats?.high_priority || 0)}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">High Priority</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-error-600">{Number(stats?.high_priority || 0)}</p>
                 </div>
-                <div className="icon-bg bg-red-100 dark:bg-red-900/30">
-                  <AlertTriangle className="icon-modern-lg text-red-600 dark:text-red-300" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600 dark:text-red-300" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Total */}
+          <Card className="stats-card-glass transition-all duration-300">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">Total</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-indigo-600">{Number(stats?.total || 0)}</p>
+                </div>
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-300" />
                 </div>
               </div>
             </CardContent>
@@ -926,7 +1028,7 @@ const Dashboard = () => {
         {/* Controls */}
         {/* Basic Search - Hidden when Advanced Search is active */}
         {!showAdvancedSearch && (
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -939,11 +1041,12 @@ const Dashboard = () => {
               </div>
             </div>
           
-          <div className="flex gap-2">
+          {/* Quick Actions Row */}
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm transition-all duration-300 ease-out ${
+              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm transition-all duration-300 ease-out ${
                 Object.keys(advancedFilters).length > 0 
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
                   : showAdvancedSearch
@@ -951,66 +1054,31 @@ const Dashboard = () => {
                   : 'hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-sm'
               }`}
             >
-              <Search className={`h-4 w-4 transition-all duration-300 ease-out ${
+              <Search className={`h-3 w-3 sm:h-4 sm:w-4 transition-all duration-300 ease-out ${
                 showAdvancedSearch ? 'rotate-180 scale-110' : 'rotate-0 scale-100'
               }`} />
-              Advanced
+              <span className="hidden sm:inline">Advanced</span>
+              <span className="sm:hidden">Adv</span>
               {Object.keys(advancedFilters).length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded-full">
+                <span className="ml-1 px-1 sm:px-1.5 py-0.5 text-xs bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded-full">
                   Active
                 </span>
               )}
             </Button>
             
-            
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm"
             >
-              <Filter className="h-4 w-4" />
-              Filters
+              <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Filters</span>
+              <span className="sm:hidden">Filter</span>
             </Button>
-            
-            <Button
-              onClick={() => setShowNewTodo(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm"
-            >
-              <Plus className="h-4 w-4" />
-              New To Do
-            </Button>
-            
-            {/* View Mode Toggle - Icon Only */}
-            <div className="flex items-center gap-1">
-              <Tooltip content="List mode" position="bottom" delay={100}>
-              <button
-                onClick={() => setViewMode('list')}
-                  className={`flex items-center justify-center w-10 h-10 rounded-md text-sm transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                  <List className="w-5 h-5" />
-              </button>
-              </Tooltip>
-              
-              <Tooltip content="Kanban Mode" position="bottom" delay={100}>
-              <button
-                onClick={() => setViewMode('kanban')}
-                  className={`flex items-center justify-center w-10 h-10 rounded-md text-sm transition-colors ${
-                  viewMode === 'kanban'
-                    ? 'bg-blue-500 text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-              >
-                  <Grid className="w-5 h-5" />
-              </button>
-              </Tooltip>
-            </div>
           </div>
         </div>
         )}
+
 
         {/* Filters Panel */}
         {showFilters && (
@@ -1219,6 +1287,49 @@ const Dashboard = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Action Buttons Row - Below Bulk Actions, Right Aligned */}
+        <div className="flex flex-wrap gap-2 justify-end mb-4 sm:mb-6">
+          <Button
+            onClick={() => setShowNewTodo(true)}
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 text-xs sm:text-sm"
+          >
+            <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">New To Do</span>
+            <span className="sm:hidden">New</span>
+          </Button>
+          
+          {/* View Mode Toggle - Icon Only */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                setViewMode('list');
+              }}
+              title="List mode"
+                className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-md text-sm transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-blue-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+                <List className="w-3 h-3 sm:w-4 sm:h-4" />
+            </button>
+            
+            <button
+              onClick={() => {
+                setViewMode('kanban');
+              }}
+              title="Kanban Mode"
+                className={`flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-md text-sm transition-colors ${
+                viewMode === 'kanban'
+                  ? 'bg-blue-500 text-white'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+                <Grid className="w-3 h-3 sm:w-4 sm:h-4" />
+            </button>
+          </div>
+        </div>
 
         {/* Advanced Search Panel */}
         <div className={`mb-6 transition-all duration-500 ease-out ${
@@ -1488,8 +1599,10 @@ const Dashboard = () => {
               className="animate-in fade-in-0 slide-in-from-bottom-4 duration-300"
             >
             <KanbanBoard
-              key={`kanban-${filteredTodos.length}-${filteredTodos.map(t => `${t.id}-${t.state}`).join(',')}`}
-              todos={filteredTodos}
+              key={`kanban-${filteredTodos.length}-${filteredTodos.map(t => `${t.id}-${t.status || t.state}`).join(',')}`}
+              todos={filteredTodos.filter(todo => 
+                !pendingTodoWithFiles || todo.id !== pendingTodoWithFiles.id
+              )}
               onEdit={handleEditTodo}
               onDelete={handleDeleteTodo}
               onToggleComplete={handleToggleComplete}
@@ -1500,7 +1613,13 @@ const Dashboard = () => {
                 onSelectTodo={handleSelectTodo}
             />
             </div>
-          ) : filteredTodos.length === 0 ? (
+          ) : (() => {
+            // Filter out the pending todo with files from the display
+            const displayTodos = filteredTodos.filter(todo => 
+              !pendingTodoWithFiles || todo.id !== pendingTodoWithFiles.id
+            );
+            return displayTodos.length === 0;
+          })() ? (
             <Card>
               <CardContent className="p-12 text-center">
                 <div className="mx-auto h-12 w-12 bg-muted rounded-lg flex items-center justify-center mb-4">
@@ -1530,7 +1649,13 @@ const Dashboard = () => {
               key="list-view"
               className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-300"
             >
-              {filteredTodos.map((todo) => (
+              {filteredTodos.filter(todo => 
+                !pendingTodoWithFiles || todo.id !== pendingTodoWithFiles.id
+              ).map((todo) => {
+                // Debug logging for todo 244
+                if (todo.id === 244) {
+                }
+                return (
                 <TodoListItem
                   key={todo.id}
                   todo={todo}
@@ -1546,7 +1671,8 @@ const Dashboard = () => {
                   getStatusBadgeInfo={getStatusBadgeInfo}
                   getActionTimeInfo={getActionTimeInfo}
                                   />
-                                ))}
+                                );
+              })}
                             </div>
           )}
         </div>
@@ -1632,9 +1758,9 @@ const Dashboard = () => {
                     <Badge 
                       variant="outline" 
                       size="sm"
-                      className={getStatusBadgeInfo(viewingTodo.status).className}
+                      className={getStatusBadgeInfo(viewingTodo.status || viewingTodo.state).className}
                     >
-                      {getStatusBadgeInfo(viewingTodo.status).label}
+                      {getStatusBadgeInfo(viewingTodo.status || viewingTodo.state).label}
                     </Badge>
                     {viewingTodo.category && (
                       <CategoryBadge category={viewingTodo.category} size="sm" />
@@ -1694,8 +1820,8 @@ const Dashboard = () => {
                       <h3 className="text-sm font-medium text-muted-foreground mb-2">Due Date</h3>
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className={getDueDateBadgeInfo(viewingTodo.due_date, viewingTodo.status).className}>
-                          {viewingTodo.due_date ? getDueDateBadgeInfo(viewingTodo.due_date, viewingTodo.status).text : 'No due date'}
+                        <span className={getDueDateBadgeInfo(viewingTodo.due_date, viewingTodo.status || viewingTodo.state).className}>
+                          {viewingTodo.due_date ? getDueDateBadgeInfo(viewingTodo.due_date, viewingTodo.status || viewingTodo.state).text : 'No due date'}
                         </span>
                       </div>
                     </div>

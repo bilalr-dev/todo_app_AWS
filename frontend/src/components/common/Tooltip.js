@@ -6,7 +6,8 @@ const Tooltip = ({
   content, 
   position = 'top',
   delay = 200,
-  className 
+  className,
+  offset = 0
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [timeoutId, setTimeoutId] = useState(null);
@@ -32,7 +33,9 @@ const Tooltip = ({
       case 'top':
         return 'bottom-full left-1/2 transform -translate-x-1/2 mb-2';
       case 'bottom':
-        return 'top-full left-1/2 transform -translate-x-1/2 mt-2';
+        return `top-full left-1/2 transform -translate-x-1/2 mt-2 ${offset !== 0 ? `-translate-x-${offset}` : ''}`;
+      case 'bottom-left':
+        return `top-full left-${offset || 8} mt-2`;
       case 'left':
         return 'right-full top-1/2 transform -translate-y-1/2 mr-2';
       case 'right':
@@ -48,6 +51,8 @@ const Tooltip = ({
         return 'top-full left-1/2 transform -translate-x-1/2 border-l-transparent border-r-transparent border-b-transparent border-t-gray-900 dark:border-t-gray-100';
       case 'bottom':
         return 'bottom-full left-1/2 transform -translate-x-1/2 border-l-transparent border-r-transparent border-t-transparent border-b-gray-900 dark:border-b-gray-100';
+      case 'bottom-left':
+        return `bottom-full right-${offset || 8} border-l-transparent border-r-transparent border-t-transparent border-b-gray-900 dark:border-b-gray-100`;
       case 'left':
         return 'left-full top-1/2 transform -translate-y-1/2 border-t-transparent border-b-transparent border-r-transparent border-l-gray-900 dark:border-l-gray-100';
       case 'right':

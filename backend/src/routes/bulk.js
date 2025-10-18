@@ -1,10 +1,17 @@
-// Bulk operations routes for v0.6 - Optimized Architecture
+// Bulk operations routes for v0.7 - Real-time WebSocket Integration
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const TodoService = require('../services/TodoService');
+const WebSocketEventService = require('../services/WebSocketEventService');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
+
+// Helper function to get WebSocket event service
+const getWebSocketEventService = (req) => {
+  const webSocketService = req.app.locals.webSocketService;
+  return webSocketService ? new WebSocketEventService(webSocketService) : null;
+};
 
 // Bulk update todos
 router.patch('/todos', authenticateToken, async (req, res) => {
@@ -27,7 +34,7 @@ router.patch('/todos', authenticateToken, async (req, res) => {
     }
 
     // Validate allowed update fields
-    const allowedFields = ['priority', 'category', 'status', 'due_date'];
+    const allowedFields = ['priority', 'category', 'state', 'due_date'];
     const updateFields = Object.keys(updates).filter(field => allowedFields.includes(field));
     
     if (updateFields.length === 0) {
@@ -44,6 +51,17 @@ router.patch('/todos', authenticateToken, async (req, res) => {
     });
 
     const result = await TodoService.bulkUpdate(todoIds, validUpdates);
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      await wsEventService.broadcastBulkAction(userId, 'update', {
+        total: todoIds.length,
+        successful: result.length,
+        failed: todoIds.length - result.length,
+        errors: []
+      });
+    }
 
     logger.info(`Bulk update completed: ${result.length} todos updated by user ${userId}`);
 
@@ -78,6 +96,17 @@ router.delete('/todos', authenticateToken, async (req, res) => {
 
     // Perform bulk delete
     const deletedCount = await TodoService.bulkDelete(todoIds);
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      await wsEventService.broadcastBulkAction(userId, 'delete', {
+        total: todoIds.length,
+        successful: deletedCount,
+        failed: todoIds.length - deletedCount,
+        errors: []
+      });
+    }
 
     logger.info(`Bulk delete completed: ${deletedCount} todos deleted by user ${userId}`);
 
@@ -117,10 +146,18 @@ router.patch('/todos/state', authenticateToken, async (req, res) => {
       });
     }
 
+    // Map frontend state values to database state values
+    const stateMapping = {
+      'pending': 'todo',
+      'in_progress': 'inProgress', 
+      'completed': 'complete'
+    };
+    const dbState = stateMapping[state];
+
     // Verify all todos belong to the user and check their current state
     const { query } = require('../config/database');
     const verifyResult = await query(
-      `SELECT id, status FROM todos WHERE id = ANY($1) AND user_id = $2`,
+      `SELECT id, state FROM todos WHERE id = ANY($1) AND user_id = $2`,
       [todoIds, userId]
     );
 
@@ -133,7 +170,7 @@ router.patch('/todos/state', authenticateToken, async (req, res) => {
 
     // Forward-only movement validation
     if (state !== 'completed') {
-      const completedTodos = verifyResult.rows.filter(todo => todo.status === 'completed');
+      const completedTodos = verifyResult.rows.filter(todo => todo.state === 'completed');
       if (completedTodos.length > 0) {
         return res.status(400).json({
           success: false,
@@ -152,30 +189,30 @@ router.patch('/todos/state', authenticateToken, async (req, res) => {
     switch (state) {
       case 'completed':
         updateQuery = `UPDATE todos 
-                      SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                      SET state = $3, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                       WHERE id = ANY($1) AND user_id = $2
                       RETURNING *`;
-        queryParams = [todoIds, userId];
+        queryParams = [todoIds, userId, dbState];
         logMessage = `Bulk complete: ${todoIds.length} todos marked as completed by user ${userId}`;
         responseField = 'completedTodos';
         break;
 
       case 'in_progress':
         updateQuery = `UPDATE todos 
-                      SET status = 'in_progress', started_at = CASE WHEN started_at IS NULL THEN CURRENT_TIMESTAMP ELSE started_at END, updated_at = CURRENT_TIMESTAMP
-                      WHERE id = ANY($1) AND user_id = $2 AND status != 'completed'
+                      SET state = $3, started_at = CASE WHEN started_at IS NULL THEN CURRENT_TIMESTAMP ELSE started_at END, updated_at = CURRENT_TIMESTAMP
+                      WHERE id = ANY($1) AND user_id = $2 AND state != 'complete'
                       RETURNING *`;
-        queryParams = [todoIds, userId];
+        queryParams = [todoIds, userId, dbState];
         logMessage = `Bulk in-progress: ${todoIds.length} todos marked as in-progress by user ${userId}`;
         responseField = 'inProgressTodos';
         break;
 
       case 'pending':
         updateQuery = `UPDATE todos 
-                      SET status = 'pending', updated_at = CURRENT_TIMESTAMP
-                      WHERE id = ANY($1) AND user_id = $2 AND status != 'completed'
+                      SET state = $3, updated_at = CURRENT_TIMESTAMP
+                      WHERE id = ANY($1) AND user_id = $2 AND state != 'complete'
                       RETURNING *`;
-        queryParams = [todoIds, userId];
+        queryParams = [todoIds, userId, dbState];
         logMessage = `Bulk pending: ${todoIds.length} todos marked as pending by user ${userId}`;
         responseField = 'pendingTodos';
         break;
@@ -185,6 +222,15 @@ router.patch('/todos/state', authenticateToken, async (req, res) => {
     const result = await query(updateQuery, queryParams);
 
     logger.info(logMessage);
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      // Broadcast individual todo_updated events for each updated todo
+      for (const todo of result.rows) {
+        await wsEventService.broadcastTodoUpdated(userId, todo);
+      }
+    }
 
     res.json({
       success: true,
@@ -246,6 +292,15 @@ router.patch('/todos/priority', authenticateToken, async (req, res) => {
 
     logger.info(`Bulk priority update: ${result.rows.length} todos updated to ${priority} by user ${userId}`);
 
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      // Broadcast individual todo_updated events for each updated todo
+      for (const todo of result.rows) {
+        await wsEventService.broadcastTodoUpdated(userId, todo);
+      }
+    }
+
     res.json({
       success: true,
       message: `${result.rows.length} todos priority updated to ${priority}`,
@@ -305,6 +360,15 @@ router.patch('/todos/category', authenticateToken, async (req, res) => {
     );
 
     logger.info(`Bulk category update: ${result.rows.length} todos updated to category "${category}" by user ${userId}`);
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      // Broadcast individual todo_updated events for each updated todo
+      for (const todo of result.rows) {
+        await wsEventService.broadcastTodoUpdated(userId, todo);
+      }
+    }
 
     res.json({
       success: true,

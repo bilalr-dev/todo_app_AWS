@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import useConfirmDialog from '../../hooks/useConfirmDialog';
+import { getFileUrl, getApiUrl } from '../../utils/constants';
 
 const FileAttachment = ({ 
   attachment, 
@@ -54,9 +55,8 @@ const FileAttachment = ({
   const handleDownload = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-      const response = await fetch(`${apiUrl}/files/download/${attachment.id}`, {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const response = await fetch(getApiUrl(`/files/download/${attachment.id}`), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -111,9 +111,8 @@ const FileAttachment = ({
       // For non-image files, download and open in new tab
       try {
         setLoading(true);
-        const token = localStorage.getItem('token');
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-        const response = await fetch(`${apiUrl}/files/download/${attachment.id}`, {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(getApiUrl(`/files/download/${attachment.id}`), {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -162,7 +161,7 @@ const FileAttachment = ({
         >
           {attachment.thumbnail_path && attachment.file_type === 'image' ? (
             <img
-              src={`/uploads/${attachment.thumbnail_path}`}
+              src={getFileUrl(attachment.thumbnail_path)}
               alt={attachment.original_name}
               className="w-8 h-8 object-cover rounded"
             />
@@ -237,7 +236,7 @@ const FileAttachment = ({
               </button>
             </div>
             <img
-              src={`/uploads/${attachment.file_path}`}
+              src={getFileUrl(attachment.file_path)}
               alt={attachment.original_name}
               className="max-w-full max-h-full object-contain"
             />

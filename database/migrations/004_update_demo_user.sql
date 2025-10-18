@@ -60,7 +60,7 @@ VALUES (
     1, 
     'demo', 
     'demo@todoapp.com', 
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8KzKz2K', -- password: 'demo123'
+    '$2a$12$lNvq8WZTmBc8zE8PQPqqv.HdKLqudLC1VQum7YirssfFK.wR694Tm', -- password: 'Demo123!'
     true, 
     CURRENT_TIMESTAMP, 
     CURRENT_TIMESTAMP

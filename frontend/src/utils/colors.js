@@ -3,24 +3,23 @@ export const TODO_COLORS = {
   // Main color palette
   BLUE: '#3B82F6',        // Blue - for low priority and >5 days
   YELLOW: '#EAB30A',      // Yellow - for medium priority and 3-5 days
-  GREEN: '#20C55E',       // Green - for high priority
-  RED: '#EF4444',         // Red - for overdue and ≤2 days
+  RED: '#EF4444',         // Red - for high priority and overdue
   
   // Todo state colors (for card borders/backgrounds)
   TODO: '#3B82F6',        // Blue for "To Do" state
-  IN_PROGRESS: '#EAB30A', // Yellow/Orange for "In Progress" state
+  IN_PROGRESS: '#8B5CF6', // Purple for "In Progress" state
   COMPLETED: '#20C55E',   // Green for "Completed" state
   OVERDUE: '#EF4444',     // Red for overdue todos
   
   // Light variants for backgrounds
   TODO_LIGHT: '#3B82F6',        // Same as main for consistency
-  IN_PROGRESS_LIGHT: '#EAB30A', // Same as main for consistency
+  IN_PROGRESS_LIGHT: '#8B5CF6', // Same as main for consistency
   COMPLETED_LIGHT: '#20C55E',   // Same as main for consistency
   OVERDUE_LIGHT: '#EF4444',     // Same as main for consistency
   
   // Dark mode variants
   TODO_DARK: '#60A5FA',        // Lighter blue for dark mode
-  IN_PROGRESS_DARK: '#F59E0B', // Lighter yellow for dark mode
+  IN_PROGRESS_DARK: '#A78BFA', // Lighter purple for dark mode
   COMPLETED_DARK: '#34D399',   // Lighter green for dark mode
   OVERDUE_DARK: '#F87171',     // Lighter red for dark mode
 };
@@ -29,32 +28,32 @@ export const TODO_COLORS = {
 export const TODO_COLOR_CLASSES = {
   // Border colors
   TODO_BORDER: 'border-blue-500 dark:border-blue-400',
-  IN_PROGRESS_BORDER: 'border-yellow-500 dark:border-yellow-400',
+  IN_PROGRESS_BORDER: 'border-purple-500 dark:border-purple-400',
   COMPLETED_BORDER: 'border-green-500 dark:border-green-400',
   OVERDUE_BORDER: 'border-red-500 dark:border-red-400',
   
   // Background colors
   TODO_BG: 'bg-blue-50/30 dark:bg-blue-900/10',
-  IN_PROGRESS_BG: 'bg-yellow-50/30 dark:bg-yellow-900/10',
+  IN_PROGRESS_BG: 'bg-purple-50/30 dark:bg-purple-900/20',
   COMPLETED_BG: 'bg-green-50/30 dark:bg-green-900/10',
   OVERDUE_BG: 'bg-red-50/30 dark:bg-red-900/10',
   
   // Badge colors
   TODO_BADGE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  IN_PROGRESS_BADGE: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 font-bold',
+  IN_PROGRESS_BADGE: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-bold',
   COMPLETED_BADGE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 font-bold',
   OVERDUE_BADGE: 'text-red-600 font-bold bg-red-50 dark:bg-red-900/20',
   
   // Due date badge colors
   TODO_DUE_BADGE: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  IN_PROGRESS_DUE_BADGE: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+  IN_PROGRESS_DUE_BADGE: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   COMPLETED_DUE_BADGE: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   OVERDUE_DUE_BADGE: 'text-red-600 font-bold bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-md',
   
   // Priority badge colors (based on priority level)
   LOW_PRIORITY_BADGE: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',      // Blue for low priority
   MEDIUM_PRIORITY_BADGE: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300', // Yellow for medium priority
-  HIGH_PRIORITY_BADGE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',      // Green for high priority
+  HIGH_PRIORITY_BADGE: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',      // Red for high priority
   
   // Due date badge colors (based on time remaining) - with background
   URGENT_DUE_BADGE: 'text-red-600 font-bold bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded-md',     // ≤2 days - Red

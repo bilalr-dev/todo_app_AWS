@@ -23,10 +23,10 @@ class FileService {
       });
       
       const result = await query(
-        `INSERT INTO file_attachments (todo_id, filename, original_name, file_path, file_size, mime_type, file_type, thumbnail_path) 
+        `INSERT INTO file_attachments (todo_id, file_name, original_name, file_path, file_size, mime_type, file_type, thumbnail_path) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
          RETURNING *`,
-        [todoId, filename, originalName, filePath, fileSize, mimeType, fileType, thumbnailPath]
+        [todoId, originalName, originalName, filePath, fileSize, mimeType, fileType, thumbnailPath]
       );
       
       const attachment = new FileAttachment(result.rows[0]);
@@ -68,14 +68,16 @@ class FileService {
         return;
       }
 
-      const thumbnailDir = path.join(process.env.UPLOAD_PATH || 'uploads', 'thumbnails');
+      // Use consistent path based on project root
+      const uploadBaseDir = path.join(process.cwd(), 'backend', 'uploads');
+      const thumbnailDir = path.join(uploadBaseDir, 'thumbnails');
       await fs.mkdir(thumbnailDir, { recursive: true });
 
       const thumbnailFilename = `thumb_${attachment.filename}`;
       const thumbnailPath = path.join(thumbnailDir, thumbnailFilename);
 
       // Construct full path to the source file
-      const sourceFilePath = path.join(process.env.UPLOAD_PATH || 'uploads', attachment.file_path);
+      const sourceFilePath = path.join(uploadBaseDir, attachment.file_path);
       
       await sharp(sourceFilePath)
         .resize(200, 200, { fit: 'inside', withoutEnlargement: true })
@@ -116,11 +118,15 @@ class FileService {
 
       // Delete physical files
       try {
+        const uploadBaseDir = path.join(process.cwd(), 'backend', 'uploads');
+        
         if (attachment.file_path) {
-          await fs.unlink(attachment.file_path);
+          const fullFilePath = path.join(uploadBaseDir, attachment.file_path);
+          await fs.unlink(fullFilePath);
         }
         if (attachment.thumbnail_path) {
-          await fs.unlink(attachment.thumbnail_path);
+          const fullThumbnailPath = path.join(uploadBaseDir, attachment.thumbnail_path);
+          await fs.unlink(fullThumbnailPath);
         }
       } catch (fileError) {
         logger.warn('Error deleting physical files', { 

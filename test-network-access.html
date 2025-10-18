@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App Network Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .loading { background-color: #fff3cd; border-color: #ffeaa7; }
+    </style>
+</head>
+<body>
+    <h1>🌐 Todo App Network Access Test</h1>
+    <p>This page tests if your Todo app is accessible from the network.</p>
+    
+    <div id="results"></div>
+    
+    <script>
+        const resultsDiv = document.getElementById('results');
+        
+        function addTest(name, status, message) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `<strong>${name}:</strong> ${message}`;
+            resultsDiv.appendChild(div);
+        }
+        
+        async function runTests() {
+            const currentIP = window.location.hostname;
+            const backendURL = `http://${currentIP}:5002`;
+            const frontendURL = `http://${currentIP}:3000`;
+            
+            addTest('Network IP', 'loading', `Detected: ${currentIP}`);
+            
+            // Test backend health
+            try {
+                const response = await fetch(`${backendURL}/api/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    addTest('Backend API', 'success', `✅ Connected - Version ${data.version}`);
+                } else {
+                    addTest('Backend API', 'error', `❌ HTTP ${response.status}`);
+                }
+            } catch (error) {
+                addTest('Backend API', 'error', `❌ Connection failed: ${error.message}`);
+            }
+            
+            // Test CORS
+            try {
+                const response = await fetch(`${backendURL}/api/health`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'GET'
+                    }
+                });
+                if (response.ok) {
+                    addTest('CORS', 'success', '✅ Cross-origin requests allowed');
+                } else {
+                    addTest('CORS', 'error', `❌ CORS failed: ${response.status}`);
+                }
+            } catch (error) {
+                addTest('CORS', 'error', `❌ CORS test failed: ${error.message}`);
+            }
+            
+            // Test frontend
+            try {
+                const response = await fetch(frontendURL);
+                if (response.ok) {
+                    addTest('Frontend', 'success', '✅ React app accessible');
+                } else {
+                    addTest('Frontend', 'error', `❌ HTTP ${response.status}`);
+                }
+            } catch (error) {
+                addTest('Frontend', 'error', `❌ Connection failed: ${error.message}`);
+            }
+            
+            addTest('Access URLs', 'success', `
+                <br>📱 <strong>Frontend:</strong> <a href="${frontendURL}" target="_blank">${frontendURL}</a>
+                <br>🔗 <strong>Backend:</strong> <a href="${backendURL}/api/health" target="_blank">${backendURL}/api/health</a>
+            `);
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>
+
+
+

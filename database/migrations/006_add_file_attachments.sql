@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS file_attachments (
     id SERIAL PRIMARY KEY,
     todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
-    filename VARCHAR(255) NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
     original_name VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
     file_size INTEGER NOT NULL,
@@ -70,7 +70,7 @@ CREATE TRIGGER update_todo_file_count_delete
 -- Add comments for documentation
 COMMENT ON TABLE file_attachments IS 'Stores file attachments for todos';
 COMMENT ON COLUMN file_attachments.todo_id IS 'Reference to the todo this file is attached to';
-COMMENT ON COLUMN file_attachments.filename IS 'Generated filename for storage';
+COMMENT ON COLUMN file_attachments.file_name IS 'Generated filename for storage';
 COMMENT ON COLUMN file_attachments.original_name IS 'Original filename from user upload';
 COMMENT ON COLUMN file_attachments.file_path IS 'Path to the stored file';
 COMMENT ON COLUMN file_attachments.file_size IS 'File size in bytes';

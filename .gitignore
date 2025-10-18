@@ -3,31 +3,20 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-lerna-debug.log*
 
-# Environment variables and credentials
+# Environment variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 .env.backup
-.env.*
-!.env.example
-*.key
-*.pem
-*.p12
-*.pfx
-secrets/
-credentials/
-config/secrets/
 
 # Build outputs
 backend/dist/
 frontend/build/
 frontend/dist/
 build/
-dist/
 
 # Logs
 logs/
@@ -47,15 +36,6 @@ pids/
 coverage/
 .nyc_output
 
-# Test reports and coverage
-testreports/
-reports/
-.jest/
-test-results/
-
-# Documentation (developer only)
-documentation/
-
 # Dependency directories
 jspm_packages/
 
@@ -70,6 +50,9 @@ jspm_packages/
 
 # Yarn Integrity file
 .yarn-integrity
+
+# dotenv environment variables file
+.env
 
 # IDE files
 .vscode/
@@ -93,10 +76,12 @@ Thumbs.db
 # PM2
 .pm2/
 
+# Documentation (developer only)
+docs/
+
 # File uploads
 uploads/
 temp/
-tmp/
 
 # Redis dump
 dump.rdb
@@ -104,6 +89,10 @@ dump.rdb
 # Database
 *.sqlite
 *.db
+
+# Testing
+.jest/
+test-results/
 
 # ESLint cache
 .eslintcache
@@ -114,11 +103,23 @@ dump.rdb
 # TypeScript
 *.tsbuildinfo
 
+# Optional eslint cache
+.eslintcache
+
 # Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -129,13 +130,19 @@ dump.rdb
 
 # Nuxt.js build / generate output
 .nuxt
+dist
 
 # Gatsby files
+.cache/
 public
 
 # Storybook build outputs
 .out
 .storybook-out
+
+# Temporary folders
+tmp/
+temp/
 
 # Editor directories and files
 .vscode/*
@@ -146,122 +153,3 @@ public
 *.njsproj
 *.sln
 *.sw?
-
-# Temporary files
-*.tmp
-*.temp
-
-# Unnecessary files
-*.orig
-*.rej
-*.swp
-*.swo
-*~
-.#*
-#*#
-.*.swp
-.*.swo
-
-# Lock files (keep package-lock.json but ignore others)
-yarn.lock
-pnpm-lock.yaml
-
-# Backup files
-*.bak
-*.backup
-
-# Archive files
-*.zip
-*.tar.gz
-*.rar
-
-# Local development files
-.local
-local/
-
-# Docker
-.dockerignore
-docker-compose.override.yml
-
-# Kubernetes
-*.kubeconfig
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-
-# Serverless
-.serverless/
-
-# Vercel
-.vercel
-
-# Netlify
-.netlify
-
-# Firebase
-.firebase/
-firebase-debug.log
-firebase-debug.*.log
-
-# Playwright
-test-results/
-playwright-report/
-playwright/.cache/
-
-# Jest
-.jest/
-coverage/
-
-# Babel
-.babel-cache/
-
-# Webpack
-.webpack/
-
-# Rollup
-.rollup.cache/
-
-# Vite
-.vite/
-
-# Turbo
-.turbo/
-
-# Rush
-common/temp/
-
-# Additional unnecessary files
-*.min.js
-*.min.css
-*.map
-*.bundle.js
-*.chunk.js
-*.hot-update.*
-
-# Development artifacts
-.cache/
-.temp/
-.tmp/
-.temporary/
-
-# Package manager artifacts
-.npm/
-.yarn/
-.pnpm-store/
-
-# Local development
-.local/
-local/
-dev/
-development/
-
-# Backup and version files
-*.bak
-*.backup
-*.old
-*.orig
-*~
-.#*
-#*#

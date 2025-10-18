@@ -1,7 +1,8 @@
-// Todo management routes for v0.6 - Optimized Architecture
+// Todo management routes for v0.7 - Real-time WebSocket Integration
 const express = require('express');
 const Todo = require('../models/Todo');
 const TodoService = require('../services/TodoService');
+const WebSocketEventService = require('../services/WebSocketEventService');
 const { authenticateToken } = require('../middleware/auth');
 const { 
   validateTodoCreation, 
@@ -13,11 +14,18 @@ const { logger } = require('../utils/logger');
 
 const router = express.Router();
 
+// Helper function to get WebSocket event service
+const getWebSocketEventService = (req) => {
+  const webSocketService = req.app.locals.webSocketService;
+  return webSocketService ? new WebSocketEventService(webSocketService) : null;
+};
+
 // Get all todos for authenticated user
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
       status, 
+      state,
       priority, 
       category, 
       limit = 50, 
@@ -27,7 +35,7 @@ router.get('/', authenticateToken, async (req, res) => {
     } = req.query;
 
     const options = {
-      status,
+      status: status || state, // Support both status and state for backward compatibility
       priority,
       category,
       limit: parseInt(limit),
@@ -172,6 +180,12 @@ router.post('/', authenticateToken, validateTodoCreation, async (req, res) => {
     const attachments = await todo.getAttachments();
     todo.attachments = attachments;
 
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      await wsEventService.broadcastTodoCreated(req.user.id, todo);
+    }
+
     logger.info('Todo created', { todoId: todo.id, userId: req.user.id });
 
     res.status(201).json({
@@ -234,11 +248,35 @@ router.put('/:id', authenticateToken, validateTodoUpdate, async (req, res) => {
       });
     }
 
+    // Track changes for WebSocket broadcasting
+    const changes = {};
+    
+    // Handle both status and state fields for compatibility
+    const statusField = req.body.status || req.body.state;
+    const currentStatus = todo.state;
+    
+    if (statusField && statusField !== currentStatus) {
+      changes.state = { from: currentStatus, to: statusField };
+    }
+    if (req.body.due_date && req.body.due_date !== todo.due_date) {
+      changes.due_date = { from: todo.due_date, to: req.body.due_date };
+    }
+
     const updatedTodo = await TodoService.updateTodo(todoId, req.body);
     
     // Fetch attachments for the updated todo
     const attachments = await updatedTodo.getAttachments();
     updatedTodo.attachments = attachments;
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    logger.info('Individual todo update - WebSocket service available:', !!wsEventService);
+    if (wsEventService) {
+      logger.info('Broadcasting individual todo_updated to user', req.user.id, 'for todo', todoId);
+      await wsEventService.broadcastTodoUpdated(req.user.id, updatedTodo, changes);
+    } else {
+      logger.warn('WebSocket service not available for individual todo update');
+    }
 
     logger.info('Todo updated', { todoId, userId: req.user.id });
 
@@ -302,7 +340,16 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Store todo title for WebSocket notification
+    const todoTitle = todo.title;
+
     await TodoService.deleteTodo(todoId);
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      await wsEventService.broadcastTodoDeleted(req.user.id, todoId, todoTitle);
+    }
 
     logger.info('Todo deleted', { todoId, userId: req.user.id });
 
@@ -367,7 +414,7 @@ router.patch('/:id/toggle', authenticateToken, async (req, res) => {
 
     const updatedTodo = await TodoService.toggleComplete(todoId);
 
-    logger.info('Todo completion toggled', { todoId, userId: req.user.id, status: updatedTodo.status });
+    logger.info('Todo completion toggled', { todoId, userId: req.user.id, state: updatedTodo.state });
 
     res.json({
       success: true,
@@ -449,10 +496,10 @@ router.post('/bulk', authenticateToken, validateBulkOperations, async (req, res)
         result = await TodoService.bulkDelete(todoIds);
         break;
       case 'complete':
-        result = await TodoService.bulkUpdate(todoIds, { status: 'completed' });
+        result = await TodoService.bulkUpdate(todoIds, { state: 'completed' });
         break;
       case 'uncomplete':
-        result = await TodoService.bulkUpdate(todoIds, { status: 'pending' });
+        result = await TodoService.bulkUpdate(todoIds, { state: 'todo' });
         break;
       case 'update':
         result = await TodoService.bulkUpdate(todoIds, updateData);

@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import { getApiUrl } from '../../utils/constants';
 
 const AdvancedSearch = ({ 
   onSearch, 
@@ -53,9 +54,8 @@ const AdvancedSearch = ({
     
     if (value.length >= 2) {
       try {
-        const token = localStorage.getItem('token');
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
-        const response = await fetch(`${apiUrl}/advanced/suggestions?q=${encodeURIComponent(value)}`, {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const response = await fetch(getApiUrl(`/advanced/suggestions?q=${encodeURIComponent(value)}`), {
           headers: {
             'Authorization': `Bearer ${token}`
           }

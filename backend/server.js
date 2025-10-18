@@ -1,5 +1,5 @@
-// Main server entry point for Todo App v0.6
-// Express server with JWT authentication, file uploads, and protected routes
+// Main server entry point for Todo App v0.7
+// Express server with JWT authentication, file uploads, WebSocket support, and protected routes
 
 const express = require('express');
 const cors = require('cors');
@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
+const http = require('http');
 require('dotenv').config();
 
 // Import database, models, and routes
@@ -18,8 +19,13 @@ const fileRoutes = require('./src/routes/files');
 const bulkRoutes = require('./src/routes/bulk');
 const exportRoutes = require('./src/routes/export');
 const advancedRoutes = require('./src/routes/advanced');
+const notificationRoutes = require('./src/routes/notifications');
+
+// Import WebSocket service
+const WebSocketService = require('./src/services/WebSocketService');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5002;
 
 // Security middleware
@@ -37,7 +43,45 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // For development, allow all localhost and local network IPs on any port
+    if (process.env.NODE_ENV === 'development') {
+      // Allow localhost on any port
+      if (origin.match(/^http:\/\/localhost:\d+$/)) {
+        return callback(null, true);
+      }
+      
+      // Allow local network IPs on any port (192.168.x.x, 172.x.x.x, 10.x.x.x)
+      if (origin.match(/^http:\/\/(192\.168\.\d+\.\d+|172\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+):\d+$/)) {
+        return callback(null, true);
+      }
+      
+      // Allow 127.0.0.1 on any port
+      if (origin.match(/^http:\/\/127\.0\.0\.1:\d+$/)) {
+        return callback(null, true);
+      }
+      
+      // Allow any local development origin for file serving
+      if (origin.match(/^http:\/\/[^\/]+:\d+$/)) {
+        return callback(null, true);
+      }
+    }
+    
+    // Allow specific origins from environment - completely dynamic
+    const allowedOrigins = [
+      process.env.CORS_ORIGIN,
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -179,7 +223,19 @@ app.get('/', (req, res) => {
 });
 
 // Static file serving for uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const uploadsPath = path.join(__dirname, 'uploads');
+console.log('Static files serving from:', uploadsPath);
+console.log('Directory exists:', require('fs').existsSync(uploadsPath));
+
+// Use Express static middleware with CORS headers
+app.use('/uploads', (req, res, next) => {
+  // Set CORS headers for static files
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(uploadsPath));
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -188,14 +244,15 @@ app.use('/api/files', fileRoutes);
 app.use('/api/bulk', bulkRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/advanced', advancedRoutes);
+app.use('/api/notifications', notificationRoutes);
 
-// 404 handler
-app.use('*', (req, res) => {
+// 404 handler for API routes only
+app.use('/api/*', (req, res) => {
   res.status(404).json({
     success: false,
     error: {
       code: 'NOT_FOUND',
-      message: 'Endpoint not found',
+      message: 'API endpoint not found',
       path: req.originalUrl
     },
     timestamp: new Date().toISOString()
@@ -237,11 +294,13 @@ process.on('SIGINT', async () => {
 });
 
 // Start server
-const server = app.listen(PORT, async () => {
-  logger.info(`🚀 Server running on port ${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for network access
+server.listen(PORT, HOST, async () => {
+  logger.info(`🚀 Server running on ${HOST}:${PORT}`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  logger.info(`📝 API Documentation: http://localhost:${PORT}/`);
+  logger.info(`🔗 Health check: http://${HOST}:${PORT}/api/health`);
+  logger.info(`🌐 Network access: http://10.68.242.235:${PORT}/api/health`);
+  logger.info(`📝 API Documentation: http://${HOST}:${PORT}/`);
   
   // Test database connection on startup
   try {
@@ -253,6 +312,17 @@ const server = app.listen(PORT, async () => {
     }
   } catch (error) {
     logger.error('❌ Database connection error:', error.message);
+  }
+
+  // Initialize WebSocket service
+  try {
+    const webSocketService = new WebSocketService(server);
+    logger.info('✅ WebSocket service initialized successfully');
+    
+    // Make WebSocket service available globally
+    app.locals.webSocketService = webSocketService;
+  } catch (error) {
+    logger.error('❌ WebSocket service initialization error:', error.message);
   }
 });
 

@@ -7,8 +7,9 @@ const { query } = require('../config/database');
 
 class FileProcessor {
   constructor() {
-    this.uploadDir = path.join(__dirname, '../../uploads');
-    this.thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
+    // Use __dirname to get the current directory (backend/src/utils), then go up to backend and navigate to uploads
+    this.uploadDir = path.join(__dirname, '..', '..', 'uploads');
+    this.thumbnailDir = path.join(__dirname, '..', '..', 'uploads', 'thumbnails');
     this.ensureDirectories();
   }
 
@@ -26,12 +27,19 @@ class FileProcessor {
     try {
       const thumbnailPath = path.join(this.thumbnailDir, `thumb_${filename}`);
       
-      logger.debug('fileProcessor: generateThumbnail called', { 
+      logger.info('fileProcessor: generateThumbnail called', { 
         filePath, 
         filename, 
         thumbnailPath,
         thumbnailDir: this.thumbnailDir 
       });
+      
+      // Check if source file exists
+      const fs = require('fs');
+      if (!fs.existsSync(filePath)) {
+        logger.error('Source file does not exist:', filePath);
+        return null;
+      }
       
       await sharp(filePath)
         .resize(200, 200, {
@@ -41,7 +49,7 @@ class FileProcessor {
         .jpeg({ quality: 80 })
         .toFile(thumbnailPath);
 
-      logger.debug('fileProcessor: Thumbnail file created successfully', { thumbnailPath });
+      logger.info('fileProcessor: Thumbnail file created successfully', { thumbnailPath });
       return thumbnailPath;
     } catch (error) {
       logger.error('Error generating thumbnail:', error);
@@ -188,11 +196,11 @@ class FileProcessor {
     try {
       // Get all existing attachments for this todo
       const result = await query(
-        'SELECT original_name FROM file_attachments WHERE todo_id = $1',
+        'SELECT file_name FROM file_attachments WHERE todo_id = $1',
         [todoId]
       );
 
-      const existingNames = result.rows.map(row => row.original_name);
+      const existingNames = result.rows.map(row => row.file_name);
       
       // If no duplicate, return original name
       if (!existingNames.includes(originalName)) {

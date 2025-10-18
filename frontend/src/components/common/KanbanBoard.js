@@ -83,14 +83,14 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
       style={style}
       {...attributes}
       className={cn(
-        "group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all duration-200 hover:shadow-lg cursor-pointer",
+        "group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm transition-all duration-200 hover:shadow-lg cursor-pointer overflow-hidden",
         isDragging && "opacity-50 shadow-xl scale-105 rotate-1 cursor-move",
         // Overdue styling (highest priority) - left border only
-        isOverdue(todo.due_date) && `border-l-4 ${TODO_COLOR_CLASSES.OVERDUE_BORDER} ${TODO_COLOR_CLASSES.OVERDUE_BG}`,
-        // Status-based styling (only if not overdue) - left border only
-        !isOverdue(todo.due_date) && todo.status === 'completed' && `border-l-4 ${TODO_COLOR_CLASSES.COMPLETED_BORDER} ${TODO_COLOR_CLASSES.COMPLETED_BG} opacity-75`,
-        !isOverdue(todo.due_date) && todo.status === 'in_progress' && `border-l-4 ${TODO_COLOR_CLASSES.IN_PROGRESS_BORDER} ${TODO_COLOR_CLASSES.IN_PROGRESS_BG}`,
-        !isOverdue(todo.due_date) && todo.status === 'pending' && `border-l-4 ${TODO_COLOR_CLASSES.TODO_BORDER} ${TODO_COLOR_CLASSES.TODO_BG}`,
+        isOverdue(todo.due_date) && `border-l-4 ${TODO_COLOR_CLASSES.OVERDUE_BORDER}`,
+        // Status-based styling (only if not overdue) - left border only, no background
+        !isOverdue(todo.due_date) && ((todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed') && `border-l-4 ${TODO_COLOR_CLASSES.COMPLETED_BORDER} opacity-75`,
+        !isOverdue(todo.due_date) && ((todo.status || todo.state) === 'in_progress' || (todo.status || todo.state) === 'inProgress') && `border-l-4 ${TODO_COLOR_CLASSES.IN_PROGRESS_BORDER}`,
+        !isOverdue(todo.due_date) && ((todo.status || todo.state) === 'pending' || (todo.status || todo.state) === 'todo') && `border-l-4 ${TODO_COLOR_CLASSES.TODO_BORDER}`,
         // Selection styling
         selectedTodos.includes(todo.id) && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/10"
       )}
@@ -106,12 +106,12 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
           <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
         </svg>
       </div>
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         {/* Header with title */}
-        <div className="mb-3">
+        <div className="mb-2 sm:mb-3">
             <h3 className={cn(
-            "text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight",
-            todo.status === 'completed' && "line-through text-gray-500 dark:text-gray-400"
+            "text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight",
+            ((todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed') && "line-through text-gray-500 dark:text-gray-50"
             )}>
               {todo.title}
             </h3>
@@ -120,15 +120,15 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
         {/* Description */}
             {todo.description && (
           <div 
-            className="text-xs text-gray-600 dark:text-gray-400 mb-3 leading-relaxed line-clamp-2 prose prose-xs max-w-none"
+            className="text-xs text-gray-700 dark:text-gray-200 mb-2 sm:mb-3 leading-relaxed line-clamp-2 prose prose-xs max-w-none"
             dangerouslySetInnerHTML={{ __html: todo.description }}
           />
             )}
 
 
         {/* Footer with badges and metadata */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 overflow-hidden">
+          <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
             {/* Bulk selection checkbox */}
             {onSelectTodo && (
               <button
@@ -136,14 +136,14 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
                   e.stopPropagation();
                   onSelectTodo(todo.id);
                 }}
-                disabled={todo.status === 'completed'}
+                disabled={(todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed'}
                 className={cn(
                   "transition-colors",
-                  todo.status === 'completed'
+                  ((todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed')
                     ? "text-gray-300 cursor-not-allowed opacity-50" 
                     : "text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
                 )}
-                title={todo.status === 'completed' ? "Cannot select completed to dos" : "Select for bulk operations"}
+                title={((todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed') ? "Cannot select completed to dos" : "Select for bulk operations"}
               >
                 {selectedTodos.includes(todo.id) ? (
                   <CheckSquare className="w-4 h-4 text-blue-500" />
@@ -154,10 +154,10 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
             )}
             
             {/* Badges - different layout for completed vs active todos */}
-            {todo.status === 'completed' ? (
+            {(todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed' ? (
               // Simplified layout for completed todos
-              <div className="flex items-center gap-2">
-                {todo.category && (
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            {todo.category && (
                   <CategoryBadge category={todo.category} size="sm" />
                 )}
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
@@ -166,7 +166,7 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
               </div>
             ) : (
               // Full layout for active todos
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                 {todo.category && (
                   <CategoryBadge category={todo.category} size="sm" />
                 )}
@@ -174,11 +174,11 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
                 {/* Status badge */}
                 <span className={cn(
                   "inline-flex items-center px-2 py-1 rounded-full text-xs font-medium",
-                  todo.status === 'in_progress'
+                  (todo.status || todo.state) === 'inProgress' || (todo.status || todo.state) === 'in_progress'
                     ? TODO_COLOR_CLASSES.IN_PROGRESS_BADGE
                     : TODO_COLOR_CLASSES.TODO_BADGE
                 )}>
-                  {todo.status === 'in_progress' ? 'In Progress' : 'To Do'}
+                  {(todo.status || todo.state) === 'inProgress' || (todo.status || todo.state) === 'in_progress' ? 'In Progress' : 'To Do'}
                 </span>
                 {todo.due_date && (
                   <span className={cn(
@@ -197,7 +197,7 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
 
           {/* File count */}
             {todo.file_count > 0 && (
-              <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-50">
                 <File className="w-3 h-3" />
               <span>{todo.file_count}</span>
               </div>
@@ -206,21 +206,21 @@ const SortableTodoItem = ({ todo, onEdit, onDelete, onToggleComplete, onFileClic
       </div>
 
       {/* Action buttons */}
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
+      <div className="absolute top-2 right-2 sm:top-3 sm:right-3 opacity-0 group-hover:opacity-100 transition-all duration-200">
         <div className="flex space-x-1">
           <button
             onClick={(e) => handleEdit(e)}
-            className="p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-all duration-200"
+            className="p-1 sm:p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-all duration-200"
             title="Edit to do"
           >
-            <Edit className="w-3.5 h-3.5" />
+            <Edit className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </button>
           <button
             onClick={(e) => handleDelete(e)}
-            className="p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all duration-200"
+            className="p-1 sm:p-1.5 rounded-md bg-white dark:bg-gray-700 shadow-sm border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-all duration-200"
             title="Delete to do"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
       </div>
@@ -242,11 +242,11 @@ const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFile
 
   return (
     <div className="flex-1 min-w-0">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 flex items-center space-x-2">
-          <div className={cn("w-3 h-3 rounded-full", color)}></div>
-          <span>{title}</span>
-          <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
+      <div className="mb-3 sm:mb-4">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-700 dark:text-gray-300 flex items-center space-x-2">
+          <div className={cn("w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full", color)}></div>
+          <span className="truncate">{title}</span>
+          <span className="text-xs sm:text-sm font-normal text-gray-500 dark:text-gray-50 flex-shrink-0">
             ({todos.length})
           </span>
         </h2>
@@ -256,7 +256,7 @@ const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFile
         <div 
           ref={setNodeRef}
           className={cn(
-            "space-y-4 min-h-[300px] p-4 border-2 border-dashed rounded-lg transition-all duration-300 relative w-full",
+            "space-y-3 sm:space-y-4 min-h-[250px] sm:min-h-[300px] p-3 sm:p-4 border-2 border-dashed rounded-lg transition-all duration-300 relative w-full",
             // Enhanced drag feedback
             isDragging && !isDragOver && "border-gray-300 dark:border-gray-500 bg-gray-50/50 dark:bg-gray-800/50",
             // Invalid drop zone styling
@@ -286,7 +286,7 @@ const KanbanColumn = ({ title, todos, onEdit, onDelete, onToggleComplete, onFile
           )}
           
           {todos.length === 0 ? (
-            <div className="flex items-center justify-center h-40 w-full text-gray-400 dark:text-gray-500 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-lg bg-gray-50/30 dark:bg-gray-800/30 hover:bg-gray-100/40 dark:hover:bg-gray-700/40 transition-colors">
+            <div className="flex items-center justify-center h-32 sm:h-40 w-full text-gray-400 dark:text-gray-500 border-2 border-dashed border-gray-300 dark:border-gray-500 rounded-lg bg-gray-50/30 dark:bg-gray-800/30 hover:bg-gray-100/40 dark:hover:bg-gray-700/40 transition-colors">
               <div className="text-center p-4">
                 <div className="text-base font-medium mb-2">
                   {columnId === 'complete' ? 'No completed tasks' : `No ${title.toLowerCase()} tasks`}
@@ -333,6 +333,11 @@ const KanbanBoard = ({
   const [dragOverColumn, setDragOverColumn] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   
+  // Debug logging for Kanban board
+  console.log('KanbanBoard: Received todos count:', todos.length);
+  console.log('KanbanBoard: Todos with status field:', todos.filter(t => t.status).length);
+  console.log('KanbanBoard: Todos with state field:', todos.filter(t => t.state).length);
+  
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -346,13 +351,13 @@ const KanbanBoard = ({
   // Complete: state = 'complete' (or completed = true for backward compatibility)
   
   const todoTodos = todos.filter(todo => {
-    return todo.status === 'pending';
+    return (todo.status || todo.state) === 'pending' || (todo.status || todo.state) === 'todo';
   });
   
-  const inProgressTodos = todos.filter(todo => todo.status === 'in_progress');
+  const inProgressTodos = todos.filter(todo => (todo.status || todo.state) === 'inProgress' || (todo.status || todo.state) === 'in_progress');
   
   const completeTodos = todos.filter(todo => {
-    return todo.status === 'completed';
+    return (todo.status || todo.state) === 'complete' || (todo.status || todo.state) === 'completed';
   });
   
 
@@ -425,9 +430,10 @@ const KanbanBoard = ({
       // If dropped on another todo, determine column by the todo's current status
       const overTodo = todos.find(todo => todo.id === overId);
       if (overTodo) {
-        if (overTodo.status === 'completed') {
+        const overStatus = overTodo.status || overTodo.state;
+        if (overStatus === 'completed' || overStatus === 'complete') {
           targetColumn = 'complete';
-        } else if (overTodo.status === 'in_progress') {
+        } else if (overStatus === 'in_progress' || overStatus === 'inProgress') {
           targetColumn = 'in-progress';
         } else {
           targetColumn = 'todo';
@@ -437,11 +443,12 @@ const KanbanBoard = ({
 
     // Determine current column based on todo status
     let currentColumn = 'todo';
-    if (activeTodo.status === 'pending') {
+    const currentStatus = activeTodo.status || activeTodo.state;
+    if (currentStatus === 'pending' || currentStatus === 'todo') {
       currentColumn = 'todo';
-    } else if (activeTodo.status === 'in_progress') {
+    } else if (currentStatus === 'in_progress' || currentStatus === 'inProgress') {
       currentColumn = 'in-progress';
-    } else if (activeTodo.status === 'completed') {
+    } else if (currentStatus === 'completed' || currentStatus === 'complete') {
       currentColumn = 'complete';
     } else {
       // Fallback for existing todos without status field
@@ -478,11 +485,12 @@ const KanbanBoard = ({
     
     // Determine current column based on todo status
     let currentColumn = 'todo';
-    if (activeTodo.status === 'pending') {
+    const currentStatus = activeTodo.status || activeTodo.state;
+    if (currentStatus === 'pending' || currentStatus === 'todo') {
       currentColumn = 'todo';
-    } else if (activeTodo.status === 'in_progress') {
+    } else if (currentStatus === 'in_progress' || currentStatus === 'inProgress') {
       currentColumn = 'in-progress';
-    } else if (activeTodo.status === 'completed') {
+    } else if (currentStatus === 'completed' || currentStatus === 'complete') {
       currentColumn = 'complete';
     } else {
       // Fallback for existing todos without status field
@@ -514,11 +522,12 @@ const KanbanBoard = ({
     
     // Determine current column based on todo status
     let currentColumn = 'todo';
-    if (activeTodo.status === 'pending') {
+    const currentStatus = activeTodo.status || activeTodo.state;
+    if (currentStatus === 'pending' || currentStatus === 'todo') {
       currentColumn = 'todo';
-    } else if (activeTodo.status === 'in_progress') {
+    } else if (currentStatus === 'in_progress' || currentStatus === 'inProgress') {
       currentColumn = 'in-progress';
-    } else if (activeTodo.status === 'completed') {
+    } else if (currentStatus === 'completed' || currentStatus === 'complete') {
       currentColumn = 'complete';
     } else {
       currentColumn = activeTodo.completed ? 'complete' : 'todo';
@@ -558,24 +567,25 @@ const KanbanBoard = ({
   ];
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="w-full overflow-x-auto">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 min-w-0">
         {columns.map(({ title, todos, color, id }) => (
-          <KanbanColumn
+        <KanbanColumn
             key={id}
             title={title}
             todos={todos}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onToggleComplete={onToggleComplete}
-            onFileClick={onFileClick}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onToggleComplete={onToggleComplete}
+          onFileClick={onFileClick}
             onViewTodo={onViewTodo}
             selectedTodos={selectedTodos}
             onSelectTodo={onSelectTodo}
@@ -606,6 +616,7 @@ const KanbanBoard = ({
         ) : null}
       </DragOverlay>
     </DndContext>
+    </div>
   );
 };
 

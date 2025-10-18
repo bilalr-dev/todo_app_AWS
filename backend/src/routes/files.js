@@ -1,4 +1,4 @@
-// File attachment routes for v0.6
+// File attachment routes for v0.7 - Real-time WebSocket Integration
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -7,10 +7,17 @@ const { authenticateToken } = require('../middleware/auth');
 const { uploadSingle, uploadMultiple } = require('../middleware/upload');
 const FileAttachment = require('../models/FileAttachment');
 const FileService = require('../services/FileService');
+const WebSocketEventService = require('../services/WebSocketEventService');
 const fileProcessor = require('../utils/fileProcessor');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
+
+// Helper function to get WebSocket event service
+const getWebSocketEventService = (req) => {
+  const webSocketService = req.app.locals.webSocketService;
+  return webSocketService ? new WebSocketEventService(webSocketService) : null;
+};
 
 // Upload single file to a todo
 router.post('/upload/:todoId', authenticateToken, ...uploadSingle('file'), async (req, res) => {
@@ -44,16 +51,24 @@ router.post('/upload/:todoId', authenticateToken, ...uploadSingle('file'), async
             // Resolve duplicate filename for this todo
             const resolvedOriginalName = await fileProcessor.resolveDuplicateFilename(todoId, req.file.originalname);
 
-            // Process the uploaded file
-            const fileData = await fileProcessor.processFile(req.file);
-            
-            logger.debug('fileProcessor.processFile result', { 
-              filename: fileData.filename,
-              filePath: fileData.filePath,
-              mimeType: fileData.mimeType,
-              fileType: fileData.fileType,
-              thumbnailPath: fileData.thumbnailPath
-            });
+    // Process the uploaded file
+    logger.info('Starting file processing', { 
+      originalName: req.file.originalname,
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+      mimeType: req.file.mimetype
+    });
+    
+    const fileData = await fileProcessor.processFile(req.file);
+    
+    logger.info('fileProcessor.processFile result', { 
+      filename: fileData.filename,
+      filePath: fileData.filePath,
+      mimeType: fileData.mimeType,
+      fileType: fileData.fileType,
+      thumbnailPath: fileData.thumbnailPath
+    });
 
             // Create file attachment record using FileService
             const attachment = await FileService.uploadFile(todoId, {
@@ -65,6 +80,12 @@ router.post('/upload/:todoId', authenticateToken, ...uploadSingle('file'), async
               fileType: fileData.fileType,
               thumbnailPath: fileData.thumbnailPath
             });
+
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      await wsEventService.broadcastFileUploaded(userId, parseInt(todoId), attachment);
+    }
 
     res.status(201).json({
       success: true,
@@ -397,9 +418,18 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Store file info for WebSocket notification
+    const fileName = attachment.original_name;
+    const todoId = attachment.todo_id;
+
     // Delete file using FileService (handles both disk and database deletion)
     await FileService.deleteFile(id);
 
+    // Broadcast WebSocket event for real-time updates
+    const wsEventService = getWebSocketEventService(req);
+    if (wsEventService) {
+      await wsEventService.broadcastFileDeleted(userId, todoId, parseInt(id), fileName);
+    }
 
     res.json({
       success: true,

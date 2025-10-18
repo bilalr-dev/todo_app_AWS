@@ -7,17 +7,23 @@ class TodoService {
   // Create a new todo
   static async createTodo(todoData) {
     try {
-      const { user_id, title, description, priority, due_date, category, status } = todoData;
+      const { user_id, title, description, priority, due_date, category, state, _createdWithFiles } = todoData;
       
       const result = await query(
-        `INSERT INTO todos (user_id, title, description, priority, due_date, category, status) 
+        `INSERT INTO todos (user_id, title, description, priority, due_date, category, state) 
          VALUES ($1, $2, $3, $4, $5, $6, $7) 
          RETURNING *`,
-        [user_id, title, description, priority || 'medium', due_date, category, status || 'pending']
+        [user_id, title, description, priority || 'medium', due_date, category, state || 'todo']
       );
       
+      // Create todo object and add the flag
+      const todo = new Todo(result.rows[0]);
+      if (_createdWithFiles) {
+        todo._createdWithFiles = true;
+      }
+      
       logger.info('Todo created successfully', { todoId: result.rows[0].id, userId: user_id });
-      return new Todo(result.rows[0]);
+      return todo;
     } catch (error) {
       logger.error('Error creating todo', { error: error.message, userId: todoData.user_id });
       throw error;
@@ -32,21 +38,24 @@ class TodoService {
         throw new Error('Todo not found');
       }
 
-      const allowedFields = ['title', 'description', 'priority', 'due_date', 'category', 'position', 'status'];
+      const allowedFields = ['title', 'description', 'priority', 'due_date', 'category', 'position', 'state'];
       const updates = [];
       const values = [];
       let paramCount = 1;
 
-      // Enforce forward-only movement rule for status changes and handle state transition timestamps
-      if (updateData.status !== undefined) {
-        const currentStatus = todo.status;
-        const newStatus = updateData.status;
+      // Handle status field updates
+      if (updateData.state !== undefined) {
+        const currentStatus = todo.state;
+        const newStatus = updateData.state;
         
         // Define allowed status transitions (forward-only)
         const allowedTransitions = {
-          'pending': ['in_progress', 'completed'],
-          'in_progress': ['completed'],
-          'completed': [] // No transitions allowed from completed
+          'todo': ['inProgress', 'complete'],
+          'pending': ['in_progress', 'completed'], // Backward compatibility
+          'inProgress': ['complete'],
+          'in_progress': ['completed'], // Backward compatibility
+          'complete': [], // No transitions allowed from completed
+          'completed': [] // Backward compatibility
         };
         
         // Allow keeping the same status (for updates that don't change status)
@@ -56,10 +65,10 @@ class TodoService {
         
         // Handle status transition timestamps
         if (currentStatus !== newStatus) {
-          if (newStatus === 'in_progress' && !todo.started_at) {
+          if ((newStatus === 'inProgress' || newStatus === 'in_progress') && !todo.started_at) {
             // First time moving to in_progress - set started_at
             updates.push('started_at = CURRENT_TIMESTAMP');
-          } else if (newStatus === 'completed' && !todo.completed_at) {
+          } else if ((newStatus === 'complete' || newStatus === 'completed') && !todo.completed_at) {
             // First time moving to completed - set completed_at
             updates.push('completed_at = CURRENT_TIMESTAMP');
           }
@@ -111,7 +120,7 @@ class TodoService {
     try {
       // Get current status to determine if toggle is allowed
       const currentResult = await Todo.query(
-        'SELECT status FROM todos WHERE id = $1',
+        'SELECT state FROM todos WHERE id = $1',
         [todoId]
       );
       
@@ -119,22 +128,22 @@ class TodoService {
         throw new Error('Todo not found');
       }
       
-      const currentStatus = currentResult.rows[0].status;
+      const currentStatus = currentResult.rows[0].state;
       
       // Only allow marking as completed, not unmarking
-      if (currentStatus === 'completed') {
+      if (currentStatus === 'complete' || currentStatus === 'completed') {
         throw new Error('Cannot unmark completed todo - forward-only movement is enforced');
       }
       
       // Mark as completed
       const result = await query(
-        'UPDATE todos SET status = $2, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-        [todoId, 'completed']
+        'UPDATE todos SET state = $2, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+        [todoId, 'complete']
       );
 
       logger.info('Todo marked as completed', { 
         todoId, 
-        status: result.rows[0].status,
+        state: result.rows[0].state,
         previousStatus: currentStatus 
       });
       return new Todo(result.rows[0]);
@@ -152,7 +161,7 @@ class TodoService {
         throw new Error('Todo not found');
       }
 
-      const currentStatus = todo.status;
+      const currentStatus = todo.state;
       
       // Define allowed status transitions (forward-only)
       const allowedTransitions = {
@@ -165,7 +174,7 @@ class TodoService {
         throw new Error(`Cannot move todo from ${currentStatus} to ${newStatus} - forward-only movement is enforced`);
       }
       
-      const updates = ['status = $2'];
+      const updates = ['state = $2'];
       const values = [newStatus];
       let paramCount = 2;
       
@@ -194,7 +203,7 @@ class TodoService {
   // Bulk operations
   static async bulkUpdate(todoIds, updateData) {
     try {
-      const allowedFields = ['priority', 'category', 'status'];
+      const allowedFields = ['priority', 'category', 'state'];
       const updates = [];
       const values = [];
       let paramCount = 1;
@@ -252,11 +261,11 @@ class TodoService {
       const result = await query(
         `SELECT 
            COUNT(*) as total,
-           COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
-           COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress,
-           COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+           COUNT(CASE WHEN state = 'todo' THEN 1 END) as pending,
+           COUNT(CASE WHEN state = 'inProgress' THEN 1 END) as in_progress,
+           COUNT(CASE WHEN state = 'complete' THEN 1 END) as completed,
            COUNT(CASE WHEN priority = 'high' THEN 1 END) as high_priority,
-           COUNT(CASE WHEN due_date < CURRENT_TIMESTAMP AND status != 'completed' THEN 1 END) as overdue
+           COUNT(CASE WHEN due_date < CURRENT_TIMESTAMP AND state != 'complete' THEN 1 END) as overdue
          FROM todos WHERE user_id = $1`,
         [userId]
       );

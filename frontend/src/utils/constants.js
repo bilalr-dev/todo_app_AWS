@@ -1,11 +1,48 @@
 // Application constants and configuration
 
-// API Configuration
+// Dynamic configuration system - no hardcoded URLs
+const getConfigValue = (envVar, fallback) => {
+  return process.env[envVar] || fallback;
+};
+
+// API Configuration - completely dynamic
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:5002/api',
+  BASE_URL: getConfigValue('REACT_APP_API_URL', 'http://localhost:5002/api'),
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000,
+};
+
+// WebSocket Configuration - completely dynamic
+export const WEBSOCKET_CONFIG = {
+  URL: getConfigValue('REACT_APP_WEBSOCKET_URL', 'ws://localhost:5002'),
+  RECONNECT_ATTEMPTS: parseInt(getConfigValue('REACT_APP_WEBSOCKET_RECONNECT_ATTEMPTS', '5')),
+  RECONNECT_DELAY: parseInt(getConfigValue('REACT_APP_WEBSOCKET_RECONNECT_DELAY', '2000')),
+};
+
+// Get backend base URL (without /api suffix) for file serving
+export const getBackendBaseUrl = () => {
+  const apiUrl = API_CONFIG.BASE_URL;
+  // Remove /api suffix to get the base server URL
+  return apiUrl.replace('/api', '');
+};
+
+// Get WebSocket URL
+export const getWebSocketUrl = () => {
+  return WEBSOCKET_CONFIG.URL;
+};
+
+// Get file URL for serving files (thumbnails, full images, etc.)
+export const getFileUrl = (filePath) => {
+  if (!filePath) return '';
+  const backendUrl = getBackendBaseUrl();
+  return `${backendUrl}/uploads/${filePath}`;
+};
+
+// Get API URL for any endpoint
+export const getApiUrl = (endpoint = '') => {
+  const baseUrl = API_CONFIG.BASE_URL;
+  return endpoint ? `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}` : baseUrl;
 };
 
 // App Configuration

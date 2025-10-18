@@ -231,6 +231,8 @@ export const AuthProvider = ({ children }) => {
     dispatch({ type: AUTH_ACTIONS.CLEAR_ERROR });
   }, []);
 
+  // Note: WebSocket cross-tab sync is handled by AuthSyncProvider component
+
   // Initialize auth state from localStorage and sessionStorage
   useEffect(() => {
     const initializeAuth = async () => {

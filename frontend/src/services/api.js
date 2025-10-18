@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_CONFIG } from '../utils/constants';
 
-// API configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
+// API configuration - completely dynamic
+const API_BASE_URL = API_CONFIG.BASE_URL;
 
 // Create axios instance
 const api = axios.create({
@@ -161,7 +162,16 @@ export const todosAPI = {
   // Advanced search todos
   advancedSearch: async (params = {}) => {
     try {
-      const response = await api.get('/advanced/search', { params });
+      // Convert arrays to comma-separated strings for backend compatibility
+      const processedParams = { ...params };
+      if (processedParams.priorities && Array.isArray(processedParams.priorities)) {
+        processedParams.priorities = processedParams.priorities.join(',');
+      }
+      if (processedParams.categories && Array.isArray(processedParams.categories)) {
+        processedParams.categories = processedParams.categories.join(',');
+      }
+      
+      const response = await api.get('/advanced/search', { params: processedParams });
       return response.data;
     } catch (error) {
       throw error;
@@ -311,6 +321,98 @@ export const healthAPI = {
   check: async () => {
     try {
       const response = await api.get('/health');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+};
+
+export const notificationsAPI = {
+  // Get notifications
+  getNotifications: async (params = {}) => {
+    try {
+      const response = await api.get('/notifications', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get unread count
+  getUnreadCount: async () => {
+    try {
+      const response = await api.get('/notifications/unread-count');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Mark notification as read
+  markAsRead: async (notificationId) => {
+    try {
+      const response = await api.put(`/notifications/${notificationId}/read`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Mark all notifications as read
+  markAllAsRead: async () => {
+    try {
+      const response = await api.put('/notifications/read-all');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get notification preferences
+  getPreferences: async () => {
+    try {
+      const response = await api.get('/notifications/preferences');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Update notification preferences
+  updatePreferences: async (preferences) => {
+    try {
+      const response = await api.put('/notifications/preferences', preferences);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Send test notification
+  sendTestNotification: async (type = 'system_notification') => {
+    try {
+      const response = await api.post('/notifications/test', { type });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Delete notification
+  deleteNotification: async (notificationId) => {
+    try {
+      const response = await api.delete(`/notifications/${notificationId}`);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get notification statistics
+  getStats: async () => {
+    try {
+      const response = await api.get('/notifications/stats');
       return response.data;
     } catch (error) {
       throw error;

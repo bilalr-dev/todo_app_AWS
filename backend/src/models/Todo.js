@@ -12,7 +12,7 @@ class Todo {
     this.due_date = data.due_date;
     this.category = data.category;
     this.position = data.position;
-    this.status = data.status || 'pending'; // Consolidated: pending | in_progress | completed
+    this.state = data.state || 'todo'; // Consolidated: todo | inProgress | completed
     this.file_count = data.file_count || 0;
     this.attachments = data.attachments || [];
     this.created_at = data.created_at;
@@ -64,7 +64,7 @@ class Todo {
 
       if (status) {
         paramCount++;
-        whereClause += ` AND status = $${paramCount}`;
+        whereClause += ` AND state = $${paramCount}`;
         values.push(status);
       }
 
@@ -148,7 +148,7 @@ class Todo {
 
       if (status) {
         paramCount++;
-        whereClause += ` AND status = $${paramCount}`;
+        whereClause += ` AND state = $${paramCount}`;
         values.push(status);
       }
 
@@ -219,7 +219,7 @@ class Todo {
       // Add status filter
       if (status) {
         paramCount++;
-        whereClause += ` AND t.status = $${paramCount}`;
+        whereClause += ` AND t.state = $${paramCount}`;
         params.push(status);
       }
 
@@ -229,7 +229,7 @@ class Todo {
                   json_agg(
                     json_build_object(
                       'id', fa.id,
-                      'filename', fa.filename,
+                      'filename', fa.file_name,
                       'original_name', fa.original_name,
                       'file_path', fa.file_path,
                       'file_size', fa.file_size,
@@ -292,6 +292,7 @@ class Todo {
   // Advanced filtering with multiple criteria
   static async findWithAdvancedFilters(userId, options = {}) {
     try {
+      console.log('findWithAdvancedFilters called with userId:', userId, 'options:', options);
       const {
         page = 1,
         limit = 10,
@@ -346,11 +347,17 @@ class Todo {
         }
       }
 
-      // Add status filter
-      if (status) {
+      // Add status filter (map to state)
+      if (status && status !== 'all') {
         paramCount++;
-        whereClause += ` AND t.status = $${paramCount}`;
-        params.push(status);
+        // Map status values to state values
+        let stateValue = status;
+        if (status === 'pending') stateValue = 'todo';
+        if (status === 'completed') stateValue = 'completed';
+        if (status === 'in_progress') stateValue = 'inProgress';
+        
+        whereClause += ` AND t.state = $${paramCount}`;
+        params.push(stateValue);
       }
 
       // Add date range filters
@@ -390,13 +397,12 @@ class Todo {
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
       const validSortDirection = ['ASC', 'DESC'].includes(sortDirection.toUpperCase()) ? sortDirection.toUpperCase() : 'DESC';
 
-      const result = await Todo.query(
-        `SELECT t.*, 
+      const query = `SELECT t.*, 
                 COALESCE(
                   json_agg(
                     json_build_object(
                       'id', fa.id,
-                      'filename', fa.filename,
+                      'filename', fa.file_name,
                       'original_name', fa.original_name,
                       'file_path', fa.file_path,
                       'file_size', fa.file_size,
@@ -413,9 +419,9 @@ class Todo {
          ${whereClause}
          GROUP BY t.id
          ORDER BY t.${validSortBy} ${validSortDirection}
-         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`,
-        [...params, limit, offset]
-      );
+         LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+      
+      const result = await Todo.query(query, [...params, limit, offset]);
 
       // Get total count
       const countResult = await Todo.query(

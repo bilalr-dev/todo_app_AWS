@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback, forwardRef, useImperativeHandle, 
 import { Upload, X, File, Image, FileText } from 'lucide-react';
 import ConfirmDialog from './ConfirmDialog';
 import useConfirmDialog from '../../hooks/useConfirmDialog';
+import { getApiUrl } from '../../utils/constants';
 
 const FileUpload = forwardRef(({ 
   todoId, 
@@ -127,7 +128,11 @@ const FileUpload = forwardRef(({
 
   const uploadSelectedFiles = useCallback(async (overrideTodoId = null) => {
     const currentTodoId = overrideTodoId || todoId;
-    if (selectedFiles.length === 0 || !currentTodoId) {
+    if (selectedFiles.length === 0) {
+      return [];
+    }
+    if (!currentTodoId) {
+      console.log('FileUpload: No todoId provided, cannot upload files');
       return [];
     }
 
@@ -208,12 +213,12 @@ const FileUpload = forwardRef(({
           const formData = new FormData();
           formData.append('file', fileData.file);
 
-          const token = localStorage.getItem('token');
-          const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
+          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+          const uploadUrl = getApiUrl(`/files/upload/${currentTodoId}`);
           
           // Clear the progress interval and start actual upload
           clearInterval(progressInterval);
-          const response = await fetch(`${apiUrl}/files/upload/${currentTodoId}`, {
+          const response = await fetch(uploadUrl, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`
